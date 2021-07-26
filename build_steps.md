@@ -35,4 +35,12 @@ definition
 ssize_t getline(char **restrict lineptr, size_t *restrict n, FILE *restrict stream);
 ```
 
+`strcmp`
+/*
+Compares two strings (char*). If both are equal, returns 0
+*/
+```c
+strcmp('hello', 'hello'); // 0
+```
+
 

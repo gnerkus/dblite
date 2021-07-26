@@ -1,11 +1,15 @@
+// required for stdin
 #include <stdio.h>
+// required for EXIT_FAILURE (1) & EXIT_SUCCESS (0)
+// exit(1) can signal successfull termination on VMS
 #include <stdlib.h>
+// required for the `strcmp` method
 #include <string.h>
 
 // InputBuffer represents the an input object for the DBLite repl
 // InputBuffer is defined as a struct type
 typedef struct {
-  char* buffer; // the input buffer
+  char* buffer; // the input buffer (input from an IO device, in this case, the shell)
   size_t buffer_length;
   ssize_t input_length;
 } InputBuffer;
@@ -68,6 +72,8 @@ int main(int argc, char* argv[]) {
     if (strcmp(input_buffer->buffer, ".exit") == 0) {
       close_input_buffer(input_buffer);
       exit(EXIT_SUCCESS);
+    } else if (strcmp(input_buffer->buffer, ".help") == 0) {
+      printf(".exit: Exits the REPL\n");
     } else {
       printf("Unrecognized command '%s'.\n", input_buffer->buffer);
     }
