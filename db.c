@@ -1,6 +1,6 @@
 // required for stdin
 #include <stdio.h>
-// required for EXIT_FAILURE (1) & EXIT_SUCCESS (0)
+// required for EXIT_FAILURE (1), EXIT_SUCCESS (0), malloc, free & exit
 // exit(1) can signal successfull termination on VMS
 #include <stdlib.h>
 // required for the `strcmp` method
