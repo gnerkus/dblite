@@ -3,6 +3,14 @@ Sqlite starts a read-execute-print loop when you start it from the command line
 
 So the first task is to build a REPL (`db.c`)
 
+## Compiling and running a C program on MacOS
+```bash
+clang program.c -o program
+```
+```bash
+./program
+```
+
 ## TERMS
 `malloc`
 // You can also dynamically allocate contiguous blocks of memory with the
