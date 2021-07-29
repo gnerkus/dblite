@@ -14,6 +14,34 @@ typedef struct {
   ssize_t input_length;
 } InputBuffer;
 
+// MetaCommandResult defines all possible results of running a meta command
+// If a meta command is recognized, use meta_command_success
+// meta commands in SQlite include .exit, .help e.t.c commands that are run in the shell and start with '.'
+typedef enum {
+  META_COMMAND_SUCCESS,
+  META_COMMAND_UNRECOGNIZED_COMMAND
+} MetaCommandResult;
+
+// PrepareResult defines all possible outcomes of running a prepared statement
+// If a prepares statement is run successfully, use prepare_success
+typedef enum {
+  PREPARE_SUCCESS,
+  PREPARE_UNRECOGNIZED_STATEMENT
+} PrepareResult;
+
+// StatementType defines all possible SQL statements allowed by this compiler
+typedef enum {
+  STATEMENT_INSERT,
+  STATEMENT_SELECT,
+  STATEMENT_UPDATE,
+  STATEMENT_DELETE
+} StatementType;
+
+// Statement defines a statement to be processed by the compiler
+typedef struct {
+  StatementType type;
+} Statement;
+
 // 'constructor' for InputBuffer
 // struct properties are accessed via ->
 InputBuffer* new_input_buffer() {
@@ -61,6 +89,63 @@ void close_input_buffer(InputBuffer* input_buffer) {
     free(input_buffer);
 }
 
+// Check if the input buffer holds a meta command
+MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
+  if (strcmp(input_buffer->buffer, ".exit") == 0) {
+    close_input_buffer(input_buffer);
+    exit(EXIT_SUCCESS);
+  } else if (strcmp(input_buffer->buffer, ".help") == 0) {
+    printf(".exit: Exits the REPL\n");
+  } else {
+    return META_COMMAND_UNRECOGNIZED_COMMAND;
+  }
+}
+
+// Set the statement type based on the content of the input buffer
+PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement) {
+  if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
+    statement->type = STATEMENT_INSERT;
+    return PREPARE_SUCCESS;
+  }
+
+  if (strncmp(input_buffer->buffer, "select", 6) == 0) {
+    statement->type = STATEMENT_SELECT;
+    return PREPARE_SUCCESS;
+  }
+
+  if (strncmp(input_buffer->buffer, "update", 6) == 0) {
+    statement->type = STATEMENT_UPDATE;
+    return PREPARE_SUCCESS;
+  }
+
+  if (strncmp(input_buffer->buffer, "delete", 6) == 0) {
+    statement->type = STATEMENT_DELETE;
+    return PREPARE_SUCCESS;
+  }
+
+  return PREPARE_UNRECOGNIZED_STATEMENT;
+}
+
+void execute_statement(Statement* statement) {
+  switch (statement->type)
+  {
+  case (STATEMENT_INSERT):
+    printf("Insert code WIP\n");
+    break;
+  case (STATEMENT_SELECT):
+    printf("Select code WIP\n");
+    break;
+  case (STATEMENT_UPDATE):
+    printf("Update code WIP\n");
+    break;
+  case (STATEMENT_DELETE):
+    printf("Delete code WIP\n");
+    break;
+  default:
+    break;
+  }
+}
+
 // main function will have an infinite loop that prints the prompt, gets a line of input, then processes that line of input:
 int main(int argc, char* argv[]) {
   InputBuffer* input_buffer = new_input_buffer(); // initialize input buffer
@@ -69,13 +154,30 @@ int main(int argc, char* argv[]) {
     print_prompt();
     read_input(input_buffer); // input_buffer is passed by reference
 
-    if (strcmp(input_buffer->buffer, ".exit") == 0) {
-      close_input_buffer(input_buffer);
-      exit(EXIT_SUCCESS);
-    } else if (strcmp(input_buffer->buffer, ".help") == 0) {
-      printf(".exit: Exits the REPL\n");
-    } else {
-      printf("Unrecognized command '%s'.\n", input_buffer->buffer);
+    // if the input begins with ".", we process it as a meta command
+    if (input_buffer->buffer[0] == '.') {
+      switch (do_meta_command(input_buffer))
+      {
+      case (META_COMMAND_SUCCESS):
+        // request input again
+        continue;
+      case (META_COMMAND_UNRECOGNIZED_COMMAND):
+        printf("Unrecognized command '%s'\n", input_buffer->buffer);
+        continue;
+      }
     }
+
+    Statement statement;
+    switch(prepare_statement(input_buffer, &statement)) {
+      case (PREPARE_SUCCESS):
+        break;
+      case (PREPARE_UNRECOGNIZED_STATEMENT):
+        printf("Unrecognized keyword at start of '%s'.\n", input_buffer->buffer);
+        // request input again
+        continue;
+    }
+
+    execute_statement(&statement);
+    printf("Executed.\n");
   }
 }
