@@ -6,6 +6,9 @@
 // required for the `strcmp` method
 #include <string.h>
 
+#define COLUMN_USERNAME_SIZE 32
+#define COLUMN_EMAIL_SIZE 255
+
 // InputBuffer represents the an input object for the DBLite repl
 // InputBuffer is defined as a struct type
 typedef struct {
@@ -26,7 +29,8 @@ typedef enum {
 // If a prepares statement is run successfully, use prepare_success
 typedef enum {
   PREPARE_SUCCESS,
-  PREPARE_UNRECOGNIZED_STATEMENT
+  PREPARE_UNRECOGNIZED_STATEMENT,
+  PREPARE_SYNTAX_ERROR
 } PrepareResult;
 
 // StatementType defines all possible SQL statements allowed by this compiler
@@ -37,9 +41,17 @@ typedef enum {
   STATEMENT_DELETE
 } StatementType;
 
+// Row defines the arguments for an insert operation
+typedef struct {
+  uint32_t id;
+  char username[COLUMN_USERNAME_SIZE];
+  char email[COLUMN_EMAIL_SIZE];
+} Row;
+
 // Statement defines a statement to be processed by the compiler
 typedef struct {
   StatementType type;
+  Row row_to_insert; // only used by insert statement
 } Statement;
 
 // 'constructor' for InputBuffer
@@ -106,6 +118,16 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
 PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement) {
   if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
     statement->type = STATEMENT_INSERT;
+    int args_assigned = sscanf(
+      input_buffer->buffer,
+      "insert %d %s %s",
+      &(statement->row_to_insert.id),
+      statement->row_to_insert.username,
+      statement->row_to_insert.email
+    );
+    if (args_assigned < 3) {
+      return PREPARE_SYNTAX_ERROR;
+    }
     return PREPARE_SUCCESS;
   }
 
