@@ -96,6 +96,7 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
     exit(EXIT_SUCCESS);
   } else if (strcmp(input_buffer->buffer, ".help") == 0) {
     printf(".exit: Exits the REPL\n");
+    return META_COMMAND_SUCCESS;
   } else {
     return META_COMMAND_UNRECOGNIZED_COMMAND;
   }
@@ -163,10 +164,12 @@ int main(int argc, char* argv[]) {
         continue;
       case (META_COMMAND_UNRECOGNIZED_COMMAND):
         printf("Unrecognized command '%s'\n", input_buffer->buffer);
+        // request input again
         continue;
       }
     }
 
+    // if the input does not begin with ".", we process is as a statement
     Statement statement;
     switch(prepare_statement(input_buffer, &statement)) {
       case (PREPARE_SUCCESS):

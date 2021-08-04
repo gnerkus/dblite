@@ -55,3 +55,26 @@ db.c:33:72: error: use of undeclared identifier 'stdin'
                                                                        ^
 3 errors generated.
 ```
+
+### Not all paths return
+```bash
+db.c:103:1: warning: non-void function does not return a value in all control paths [-Wreturn-type]
+}
+^
+1 warning generated.
+```
+Source of the error:
+```c
+MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
+  if (strcmp(input_buffer->buffer, ".exit") == 0) {
+    close_input_buffer(input_buffer);
+    exit(EXIT_SUCCESS);
+  } else if (strcmp(input_buffer->buffer, ".help") == 0) {
+    printf(".exit: Exits the REPL\n");
+    //return META_COMMAND_SUCCESS;
+  } else {
+    return META_COMMAND_UNRECOGNIZED_COMMAND;
+  }
+}
+```
+The `else if` does not return a value;
