@@ -3,6 +3,14 @@ Sqlite starts a read-execute-print loop when you start it from the command line
 
 So the first task is to build a REPL (`db.c`)
 
+## Compiling and running a C program on MacOS
+```bash
+clang program.c -o program
+```
+```bash
+./program
+```
+
 ## TERMS
 `malloc`
 // You can also dynamically allocate contiguous blocks of memory with the
@@ -33,6 +41,14 @@ returns the size of the buffer read
 definition
 ```c
 ssize_t getline(char **restrict lineptr, size_t *restrict n, FILE *restrict stream);
+```
+
+`strcmp`
+/*
+Compares two strings (char*). If both are equal, returns 0
+*/
+```c
+strcmp('hello', 'hello'); // 0
 ```
 
 
