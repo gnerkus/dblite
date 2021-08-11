@@ -13,6 +13,17 @@ Insert statements will look like:
 insert 1 ify foo@bar.com
 ```
 
+The data read in will be copied to a data structure representing the table.
+SQLite uses a B-tree for fast lookups, inserts and deletes. We’ll start with something simpler. Like a B-tree, it will group rows into pages, but instead of arranging those pages as a tree it will arrange them as an array.
+
+The plan:
+
+- Store rows in blocks of memory called pages
+- Each page stores as many rows as it can fit
+- Rows are serialized into a compact representation with each page
+- Pages are only allocated as needed
+- Keep a fixed-size array of pointers to pages
+
 ## TERMs
 `sscanf`
 *Definition*
@@ -20,7 +31,7 @@ insert 1 ify foo@bar.com
 int sscanf ( const char * s, const char * format, ...);
 ```
 Read formatted data from string.
-Reads data from `s` and stored them according to parameter `format` into the locations given by the additional arguments.
+Reads data from `s` and stored them according to parameter `format` into the locations given by the additional arguments `...`.
 On success, returns the number of items in the argument list successfully filled.
 
 ```c

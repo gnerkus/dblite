@@ -42,6 +42,8 @@ typedef enum {
 } StatementType;
 
 // Row defines the arguments for an insert operation
+// username is an array of characters that has COLUMN_USERNAME_SIZE allocated
+// email is an array of characters; a string
 typedef struct {
   uint32_t id;
   char username[COLUMN_USERNAME_SIZE];
@@ -53,6 +55,19 @@ typedef struct {
   StatementType type;
   Row row_to_insert; // only used by insert statement
 } Statement;
+
+// returns the size of an attribute of a struct
+// e.g size_of_attribute(Row, id); -> uint32_t <some_value>
+#define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
+
+// serialized representation of a row in the table
+const uint32_t ID_SIZE = size_of_attribute(Row, id);
+const uint32_t USERNAME_SIZE = size_of_attribute(Row, username);
+const uint32_t EMAIL_SIZE = size_of_attribute(Row, email);
+const uint32_t ID_OFFSET = 0;
+const uint32_t USERNAME_OFFSET = ID_OFFSET + ID_SIZE;
+const uint32_t EMAIL_OFFSET = USERNAME_OFFSET + USERNAME_SIZE;
+const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
 
 // 'constructor' for InputBuffer
 // struct properties are accessed via ->
@@ -115,6 +130,8 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
 }
 
 // Set the statement type based on the content of the input buffer
+// &(statement->row_to_insert.id) stores the value of the digit read into the address
+// sscanf requires the arguments be specified by address
 PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement) {
   if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
     statement->type = STATEMENT_INSERT;
