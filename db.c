@@ -61,6 +61,14 @@ typedef struct {
 #define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
 
 // serialized representation of a row in the table
+/*
+A serialized row looks like this:
+COLUMN    SIZE(bytes)   OFFSET
+id        4             0
+username  32            4
+email     255           36
+total     291
+*/
 const uint32_t ID_SIZE = size_of_attribute(Row, id);
 const uint32_t USERNAME_SIZE = size_of_attribute(Row, username);
 const uint32_t EMAIL_SIZE = size_of_attribute(Row, email);
@@ -68,6 +76,34 @@ const uint32_t ID_OFFSET = 0;
 const uint32_t USERNAME_OFFSET = ID_OFFSET + ID_SIZE;
 const uint32_t EMAIL_OFFSET = USERNAME_OFFSET + USERNAME_SIZE;
 const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
+
+// store the row in a memory location
+void serialize_row(Row* source, void* destination) {
+  // destination is a memory address (pointer)
+  // get the address of the id, copy into the destination from position ID_OFFSET (usually the beginning of destination)
+  memcpy(destination + ID_OFFSET, &(source->id), ID_SIZE);
+  // get the address of the username, copy into the destination from position USERNAME_OFFSET
+  memcpy(destination + USERNAME_OFFSET, &(source->username), USERNAME_SIZE);
+  memcpy(destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
+}
+
+const uint32_t PAGE_SIZE = 4096;
+
+#define TABLE_MAX_PAGES 100
+const uint32_t ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE;
+const uint32_t TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
+
+typedef struct {
+  uint32_t num_rows;
+  void* pages[TABLE_MAX_PAGES];
+} Table;
+
+void deserialize_row(void* source, Row* destination) {
+  // get all the content from memory block position ID_OFFSET, of size ID_SIZE, and copy into destination->id
+  memcpy(&(destination->id), source + ID_OFFSET, ID_SIZE);
+  memcpy(&(destination->username), source + USERNAME_OFFSET, USERNAME_SIZE);
+  memcpy(&(destination->email), source + EMAIL_OFFSET, EMAIL_SIZE);
+}
 
 // 'constructor' for InputBuffer
 // struct properties are accessed via ->
