@@ -42,17 +42,24 @@ int i;
 sscanf (sentence,"%s %*s %d",str,&i);
 printf ("%s -> %d\n",str,i); // Rudolph -> 12
 ```
-puts "Rudolph" in the first %s
-puts "is" in the next %s
-puts 12 in the %d
+- puts "Rudolph" in the first %s
+- puts "is" in the next %s
+- puts 12 in the %d
 
-`stuff`
+`memcpy`
 *Definition*
+-- string.h
 ```c
-
+void* memcpy( void *dest, const void *src, size_t count );
+void* memcpy( void *restrict dest, const void *restrict src, size_t count );
 ```
-stuff
+Copies count characters from the object pointed to by `src` to the object pointed to
+by the `dest`. Both objects are interpreted as arrays of unsigned char
 ```c
-
+char source[] = "once upon a midnight dreary...", dest[4];
+memcpy(dest, source, sizeof dest);
+for(size_t n = 0; n < sizeof dest; ++n)
+  putchar(dest[n]);
 ```
+- puts "once" to command line
 

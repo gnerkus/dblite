@@ -78,3 +78,22 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
 }
 ```
 The `else if` does not return a value;
+
+### Missing import of <stdio.h> for putchar
+```bash
+memcpy_test.c:7:5: error: implicit declaration of function 'putchar' is invalid in C99
+      [-Werror,-Wimplicit-function-declaration]
+    putchar(dest[n]);
+    ^
+1 error generated.
+```
+
+### Missing import of <string.h> for memcpy
+```bash
+memcpy_test.c:6:3: error: implicitly declaring library function 'memcpy' with type 'void *(void *, const void *,
+      unsigned long)' [-Werror,-Wimplicit-function-declaration]
+  memcpy(dest, source, sizeof dest);
+  ^
+memcpy_test.c:6:3: note: include the header <string.h> or explicitly provide a declaration for 'memcpy'
+1 error generated.
+```
