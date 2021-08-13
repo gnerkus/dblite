@@ -8,6 +8,14 @@ Database limitations:
 
 Hard-coded table will store users via `id`, `username` and `email`.
 
+-- The sole table has multiple pages and each page has multiple rows.
+-- The page holds 4kb because it's the same size as a page used in the virtual memory systems
+of most computer architectures.
+-- One page in the DB corresponds to one page in the OS; OS will move pages in and out of memory as whole units
+instead of breaking them up.
+-- Initial limit set to 100 pages
+-- 
+
 Insert statements will look like:
 ```bash
 insert 1 ify foo@bar.com
