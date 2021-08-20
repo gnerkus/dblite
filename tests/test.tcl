@@ -1,11 +1,12 @@
-puts "Hello, World - In quotes"    ;# This is a comment after the command.
-# This is a comment at beginning of a line
-puts {Hello, World - In Braces}
-puts {Bad comment syntax example}   # *Error* - there is no semicolon!
+# This file implements regression tests for DBLite library.
+exec echo ".help" | dblite
 
-puts "This is line 1"; puts "this is line 2"
+proc dblite {args} {
+  # If there are two args and the first one is not an option i.e -stuff...
+  if {[llength $args]>=2 && [string index [lindex $args 0] 0]!="-"} {
+    # pass the arguments to the dblite command
+    puts $dbliteExec $args
+  }
+}
 
-puts "Hello, World; - With  a semicolon inside the quotes"
-
-# Words don't need to be quoted unless they contain white space:
-puts HelloWorld
+# dblite
