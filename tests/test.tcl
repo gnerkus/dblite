@@ -1,12 +1,12 @@
 # This file implements regression tests for DBLite library.
-exec echo ".help" | dblite
+set workingDir [pwd]
+set dbliteFileName "$workingDir/.bin/dblite"
 
-proc dblite {args} {
-  # If there are two args and the first one is not an option i.e -stuff...
-  if {[llength $args]>=2 && [string index [lindex $args 0] 0]!="-"} {
-    # pass the arguments to the dblite command
-    puts $dbliteExec $args
-  }
+# Check if file is executable
+set isExecutable [file executable $dbliteFileName]
+if {!$isExecutable} {
+  puts "error"
 }
 
-# dblite
+set result [exec $dbliteFileName << "insert 1 foo a@b.c\ninsert 2 bar d@e.f\nselect\n.exit\n"]
+puts $result
