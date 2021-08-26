@@ -8,31 +8,35 @@ if {!$isExecutable} {
   puts "error"
 }
 
+proc testOutput {description expected actual} {
+  if {[string compare $actual $expected] != 0} {
+    puts "Test failure"
+    puts "Description:\n  $description"
+    puts "Expected result:\n  $expected"
+    puts "Received result:\n  $actual"
+  } else {
+    puts "Test passed"
+  }
+}
+
 # Basic insert test
-set description "inserts and retrieves a row"
-set expected "db > Executed.
+set singleInsertDesc "inserts and retrieves a row"
+set singleInsertExpected "db > Executed.
 db > Executed.
 db > (1, foo, a@b.c)
 (2, bar, d@e.f)
 Executed.
 db > "
-set result [exec $dbliteFileName << "insert 1 foo a@b.c\ninsert 2 bar d@e.f\nselect\n.exit\n"]
+set singleInsertResult [exec $dbliteFileName << "insert 1 foo a@b.c\ninsert 2 bar d@e.f\nselect\n.exit\n"]
 
-if {[string compare $result $expected] != 0} {
-  puts "Test failure"
-  puts "Description:\n  $description"
-  puts "Expected result:\n  $expected"
-  puts "Received result:\n  $result"
-} else {
-  puts "Test passed"
-}
+puts [testOutput $singleInsertDesc $singleInsertExpected $singleInsertResult]
 
+# Bulk insert test
 set baseCommand ""
 set insertCommand "insert 1 foo a@b.c\n"
 
-# Bulk insert test
-set description2 "prints error message when table is full"
-set expected2 "db > Error: Table full."
+set bulkInsertDesc "prints error message when table is full"
+set bulkInsertExpected "db > Error: Table full."
 
 for { set a 0} {$a < 1401} {incr a} {
   append baseCommand $insertCommand
@@ -40,16 +44,9 @@ for { set a 0} {$a < 1401} {incr a} {
 
 append baseCommand ".exit\n"
 
-set result2 [exec $dbliteFileName << $baseCommand]
-set result2_list [split $result2 "\n"]
+set result [exec $dbliteFileName << $baseCommand]
+set resultList [split $result "\n"]
 
-set lastOutput [lindex $result2_list 1400]
+set bulkInsertResult [lindex $resultList 1400]
 
-if {[string compare $lastOutput $expected2] != 0} {
-  puts "Test failure"
-  puts "Description:\n  $description2"
-  puts "Expected result:\n  $expected2"
-  puts "Received result:\n  $lastOutput"
-} else {
-  puts "Test passed"
-}
+puts [testOutput $bulkInsertDesc $bulkInsertExpected $bulkInsertResult]

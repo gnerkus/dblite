@@ -105,3 +105,24 @@ exec $filePath << "arg0 arg1"
 exec $filePath <@ $openFile
 ```
 openFile is passed to the first command as its standard input;$openFile is a file that has been opened by `open`.
+
+**`string compare`** [TCL]
+
+*Definition*
+```tcl
+string compare ?-nocase? ?-length int? string1 string2
+```
+Perform a character-by-character comparison of strings string1 and string2. Returns -1, 0, or 1, depending on whether string1 is lexicographically less than, equal to, or greater than string2
+
+*Examples*
+```tcl
+string compare "hello" "hello"
+# 0
+```
+
+**`for loop`** [TCL]
+
+*Definition*
+```tcl
+for {set i 0} {$i < count} {incr i} {}
+```
