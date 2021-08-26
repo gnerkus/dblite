@@ -9,13 +9,19 @@ if {!$isExecutable} {
 }
 
 proc testOutput {description expected actual} {
+  set TEST_FAIL_COLOR "\033\[37;41m"
+  set TEST_PASS_COLOR "\033\[37;42m"
+  set TEST_FAIL_DESC_COLOR "\033\[1;31m"
+  set TEST_PASS_DESC_COLOR "\033\[1;32m"
+  set RESET_COLOR "\033\[0m"
+
   if {[string compare $actual $expected] != 0} {
-    puts "Test failed: $description"
+    puts "$TEST_FAIL_COLOR FAIL:$RESET_COLOR $description"
     puts "Description:\n  $description"
-    puts "Expected result:\n  $expected"
-    puts "Received result:\n  $actual"
+    puts "Expected result:\n  $TEST_PASS_DESC_COLOR $expected $RESET_COLOR"
+    puts "Received result:\n  $TEST_FAIL_DESC_COLOR $actual $RESET_COLOR"
   } else {
-    puts "Test passed: $description"
+    puts "$TEST_PASS_COLOR PASS:$RESET_COLOR $description"
   }
 }
 
