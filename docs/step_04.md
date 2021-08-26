@@ -1,5 +1,11 @@
 # Step 04
 
+The plan:
+1. Write spec to test single insert
+2. Write spec to insert bulk insert to maximum table row count
+3. Write spec to insert long strings
+
+[3] C strings are supposed to end with a null character and space should be allocated for that.
 
 ## TERMS
 **`llength`** [TCL]

@@ -10,12 +10,12 @@ if {!$isExecutable} {
 
 proc testOutput {description expected actual} {
   if {[string compare $actual $expected] != 0} {
-    puts "Test failure"
+    puts "Test failed: $description"
     puts "Description:\n  $description"
     puts "Expected result:\n  $expected"
     puts "Received result:\n  $actual"
   } else {
-    puts "Test passed"
+    puts "Test passed: $description"
   }
 }
 
@@ -50,3 +50,23 @@ set resultList [split $result "\n"]
 set bulkInsertResult [lindex $resultList 1400]
 
 puts [testOutput $bulkInsertDesc $bulkInsertExpected $bulkInsertResult]
+
+# Insert long length strings
+set longUsername ""
+for {set a 0} {$a < 32} {incr a} {
+  append longUsername "a"
+}
+
+set longEmail ""
+for {set a 0} {$a < 255} {incr a} {
+  append longEmail "a"
+}
+
+set longStringInsertDesc "allows inserting strings that are the maximum length"
+set longStringInsertExpected "db > Executed.
+db > (1, $longUsername, $longEmail)
+Executed.
+db > "
+set longStringInsertResult [exec $dbliteFileName << "insert 1 $longUsername $longEmail\nselect\n.exit\n"]
+
+puts [testOutput $longStringInsertDesc $longStringInsertExpected $longStringInsertResult]
