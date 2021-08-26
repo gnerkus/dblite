@@ -4,8 +4,11 @@ The plan:
 1. Write spec to test single insert
 2. Write spec to insert bulk insert to maximum table row count
 3. Write spec to insert long strings
+4. Throw an error if the string inputs are too long
 
 [3] C strings are supposed to end with a null character and space should be allocated for that.
+
+[4] If the string being read by `scanf` is larger than the buffer it's reading into, it will cause buffer overflow and `scanf` will start writing to unexpected places.
 
 ## TERMS
 **`llength`** [TCL]
@@ -131,4 +134,28 @@ string compare "hello" "hello"
 *Definition*
 ```tcl
 for {set i 0} {$i < count} {incr i} {}
+```
+
+**`strok`**
+
+*Definition*
+```c
+
+```
+
+*Examples*
+```c
+
+```
+
+**`atoi`**
+
+*Definition*
+```c
+
+```
+
+*Examples*
+```c
+
 ```

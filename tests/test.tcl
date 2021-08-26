@@ -76,3 +76,22 @@ db > "
 set longStringInsertResult [exec $dbliteFileName << "insert 1 $longUsername $longEmail\nselect\n.exit\n"]
 
 puts [testOutput $longStringInsertDesc $longStringInsertExpected $longStringInsertResult]
+
+# Print message if string inputs are too long
+set longUsername2 ""
+for {set a 0} {$a < 33} {incr a} {
+  append longUsername2 "a"
+}
+
+set longEmail2 ""
+for {set a 0} {$a < 256} {incr a} {
+  append longEmail2 "a"
+}
+
+set longStringInsertErrorDesc "prints error message if strings are too long"
+set longStringInsertErrorExpected "db > String is too long.
+db > Executed.
+db > "
+set longStringInsertErrorResult [exec $dbliteFileName << "insert 1 $longUsername2 $longEmail2\nselect\n.exit\n"]
+
+puts [testOutput $longStringInsertErrorDesc $longStringInsertErrorExpected $longStringInsertErrorResult]
