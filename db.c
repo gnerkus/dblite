@@ -29,6 +29,8 @@ typedef enum {
 // If a prepares statement is run successfully, use prepare_success
 typedef enum {
   PREPARE_SUCCESS,
+  PREPARE_STRING_TOO_LONG,
+  PREPARE_NEGATIVE_ID,
   PREPARE_UNRECOGNIZED_STATEMENT,
   PREPARE_SYNTAX_ERROR
 } PrepareResult;
@@ -46,8 +48,9 @@ typedef enum {
 // email is an array of characters; a string
 typedef struct {
   uint32_t id;
-  char username[COLUMN_USERNAME_SIZE];
-  char email[COLUMN_EMAIL_SIZE];
+  // '+1' allocates an extra position for the null character
+  char username[COLUMN_USERNAME_SIZE + 1];
+  char email[COLUMN_EMAIL_SIZE + 1];
 } Row;
 
 // Statement defines a statement to be processed by the compiler
@@ -127,7 +130,6 @@ InputBuffer* new_input_buffer() {
 // display a prompt requesting input
 void print_prompt() { printf("db > "); }
 
-// stuff
 void read_input(InputBuffer* input_buffer) {
   ssize_t bytes_read =
       getline(&(input_buffer->buffer), &(input_buffer->buffer_length), stdin);
@@ -174,23 +176,45 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
   }
 }
 
+// tokenize the insert statement using strtok
+// then validate input tokens before performing an insert operation
+// check for input length and throw error if too long
+PrepareResult prepare_insert(InputBuffer* input_buffer, Statement* statement) {
+  statement->type = STATEMENT_INSERT;
+
+  char* keyword = strtok(input_buffer->buffer, " ");
+  char* id_string = strtok(NULL, " ");
+  char* username = strtok(NULL, " ");
+  char* email = strtok(NULL, " ");
+
+  if (id_string == NULL || username == NULL || email == NULL) {
+    return PREPARE_SYNTAX_ERROR;
+  }
+
+  int id = atoi(id_string);
+  if (id < 0) {
+    return PREPARE_NEGATIVE_ID;
+  }
+
+  if (strlen(username) > COLUMN_USERNAME_SIZE) {
+    return PREPARE_STRING_TOO_LONG;
+  }
+  if (strlen(email) > COLUMN_EMAIL_SIZE) {
+    return PREPARE_STRING_TOO_LONG;
+  }
+
+  statement->row_to_insert.id = id;
+  strcpy(statement->row_to_insert.username, username);
+  strcpy(statement->row_to_insert.email, email);
+
+  return PREPARE_SUCCESS;
+}
+
 // Set the statement type based on the content of the input buffer
 // &(statement->row_to_insert.id) stores the value of the digit read into the address
-// sscanf requires the arguments be specified by address
 PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement) {
   if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
-    statement->type = STATEMENT_INSERT;
-    int args_assigned = sscanf(
-      input_buffer->buffer,
-      "insert %d %s %s",
-      &(statement->row_to_insert.id),
-      statement->row_to_insert.username,
-      statement->row_to_insert.email
-    );
-    if (args_assigned < 3) {
-      return PREPARE_SYNTAX_ERROR;
-    }
-    return PREPARE_SUCCESS;
+    return prepare_insert(input_buffer, statement);
   }
 
   if (strncmp(input_buffer->buffer, "select", 6) == 0) {
@@ -212,7 +236,6 @@ PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement)
 }
 
 // figure out where to read/write in memory for a row
-
 void* row_slot(Table* table, uint32_t row_num) {
   uint32_t page_num = row_num / ROWS_PER_PAGE;
   void* page = table->pages[page_num];
@@ -225,7 +248,6 @@ void* row_slot(Table* table, uint32_t row_num) {
   return page + byte_offset;
 }
 
-// insert statement
 ExecuteResult execute_insert(Statement* statement, Table* table) {
   if (table->num_rows >= TABLE_MAX_ROWS) {
     return EXECUTE_TABLE_FULL;
@@ -238,7 +260,6 @@ ExecuteResult execute_insert(Statement* statement, Table* table) {
   return EXIT_SUCCESS;
 }
 
-// select statement
 ExecuteResult execute_select(Statement* statement, Table* table) {
   Row row;
   for (uint32_t i = 0; i < table->num_rows; i++) {
@@ -283,7 +304,8 @@ void free_table(Table* table) {
   free(table);
 }
 
-// main function will have an infinite loop that prints the prompt, gets a line of input, then processes that line of input:
+// main function will have an infinite loop that prints the prompt,
+// gets a line of input, then processes that line of input:
 int main(int argc, char* argv[]) {
   Table* table = new_table();
   InputBuffer* input_buffer = new_input_buffer(); // initialize input buffer
@@ -292,7 +314,7 @@ int main(int argc, char* argv[]) {
     print_prompt();
     read_input(input_buffer); // input_buffer is passed by reference
 
-    // if the input begins with ".", we process it as a meta command
+    // if the input begins with ".", we process it as a meta command (.help, .exit e.t.c)
     if (input_buffer->buffer[0] == '.') {
       switch (do_meta_command(input_buffer))
       {
@@ -311,6 +333,12 @@ int main(int argc, char* argv[]) {
     switch(prepare_statement(input_buffer, &statement)) {
       case (PREPARE_SUCCESS):
         break;
+      case (PREPARE_NEGATIVE_ID):
+        printf("ID must be positive.\n");
+        continue;
+      case (PREPARE_STRING_TOO_LONG):
+        printf("String is too long.\n");
+        continue;
       case (PREPARE_SYNTAX_ERROR):
         printf("Syntax error. Could not parse statement.\n");
         continue;
