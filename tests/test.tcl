@@ -1,3 +1,5 @@
+puts "spec: BASIC INSERT"
+
 # This file implements regression tests for DBLite library.
 set workingDir [pwd]
 set dbliteFileName "$workingDir/.bin/dblite"
