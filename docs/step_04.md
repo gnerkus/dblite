@@ -140,22 +140,37 @@ for {set i 0} {$i < count} {incr i} {}
 
 *Definition*
 ```c
-
+char *strtok( char *str1, const char *str2 );
 ```
+Returns a pointer to the next token in str1, where str2 contains the delimiters that determine the token. strtok() returns NULL if no token is found.
+
+All calls after the first call should have str1 be NULL.
 
 *Examples*
 ```c
-
+char str[] = "now # is the time for all # good men to come to the # aid of their country";
+  char delims[] = "#";
+  char *result = NULL;
+  result = strtok( str, delims );
+  while( result != NULL ) {
+      printf( "result is \"%s\"\n", result );
+      result = strtok( NULL, delims );
+  }
+// "now "
+// " is the time for all "
+// ...
 ```
 
 **`atoi`**
 
 *Definition*
 ```c
-
+int atoi(const char *str);
 ```
+Converts a string to an integer.
 
 *Examples*
 ```c
-
+atoi("512");
+// 512
 ```

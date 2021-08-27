@@ -10,6 +10,7 @@ make
 - Add the `.bin` directory to path. This should make the executable available in the shell.
 
 ## Tests
+Update the binary then run:
 ```
-tclsh tests/test.tcl
+make test
 ```

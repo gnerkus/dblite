@@ -95,3 +95,15 @@ db > "
 set longStringInsertErrorResult [exec $dbliteFileName << "insert 1 $longUsername2 $longEmail2\nselect\n.exit\n"]
 
 puts [testOutput $longStringInsertErrorDesc $longStringInsertErrorExpected $longStringInsertErrorResult]
+
+# Print error is id is negative
+set negativeInsertId -1
+
+set negativeInsertDesc "prints an error message if id is negative"
+set negativeInsertExpected "db > ID must be positive.
+db > Executed.
+db > "
+
+set negativeIdInsertResult [exec $dbliteFileName << "insert $negativeInsertId foo foo@bar.com\nselect\n.exit\n"]
+
+puts [testOutput $negativeInsertDesc $negativeInsertExpected $negativeIdInsertResult]
