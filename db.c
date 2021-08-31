@@ -1,10 +1,23 @@
 // required for stdin
 #include <stdio.h>
+
 // required for EXIT_FAILURE (1), EXIT_SUCCESS (0), malloc, free & exit
 // exit(1) can signal successfull termination on VMS
 #include <stdlib.h>
+
 // required for the `strcmp` method
 #include <string.h>
+
+#include <errno.h>
+
+// required for `open`, O_RDWR, O_CREAT
+#include <fcntl.h>
+
+// required for S_IRUSR, S_IWUSR
+#include <sys/stat.h>
+
+// required for `close`, `lseek`
+#include <unistd.h>
 
 #define COLUMN_USERNAME_SIZE 32
 #define COLUMN_EMAIL_SIZE 255
@@ -112,9 +125,28 @@ const uint32_t PAGE_SIZE = 4096;
 const uint32_t ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE;
 const uint32_t TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
 
+/*
+The Pager accesses the page cache and the file.
+The Table object makes requests for pages through the pager
+
+Data is saved to a file via multiple page-sized memory blocks.
+Reads are made via pages.
+
+file_length -> the size of each page
+*/
 typedef struct {
-  uint32_t num_rows;
+  int file_descriptor;
+  uint32_t file_length;
   void* pages[TABLE_MAX_PAGES];
+} Pager;
+
+/*
+The Table replaces the B-Tree in the real SQLite implementation.
+This is temporary.
+*/
+typedef struct {
+  Pager* pager;
+  uint32_t num_rows;
 } Table;
 
 // 'constructor' for InputBuffer
@@ -238,11 +270,7 @@ PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement)
 // figure out where to read/write in memory for a row
 void* row_slot(Table* table, uint32_t row_num) {
   uint32_t page_num = row_num / ROWS_PER_PAGE;
-  void* page = table->pages[page_num];
-  if (page == NULL) {
-    // Allocate memory only when we try to access page
-    page = table->pages[page_num] = malloc(PAGE_SIZE);
-  }
+  void* page = get_page(table->pager, page_num);
   uint32_t row_offset = row_num % ROWS_PER_PAGE; // returns 0 if row_num == ROWS_PER_PAGE
   uint32_t byte_offset = row_offset * ROW_SIZE;
   return page + byte_offset;
@@ -288,13 +316,61 @@ ExecuteResult execute_statement(Statement* statement, Table *table) {
   }
 }
 
-Table* new_table() {
+/*
+db_open():
+
+1. Opens a database file
+2. Initializing a pager data structure
+3. Initializing a table data structure
+
+The pager is the go between the memory and the table
+
+filename -> The file name for the DB
+*/
+Table* db_open(const char* filename) {
+  Pager* pager = pager_open(filename);
+  uint32_t num_rows = pager->file_length / ROW_SIZE;
+
   Table* table = malloc(sizeof(Table)); // (size_t)808UL (unsigned long)
-  table->num_rows = 0;
-  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
-    table->pages[i] = NULL;
-  }
+  table->pager = pager;
+  table->num_rows = num_rows;
+ 
   return table;
+}
+
+/*
+The pager communicates directly with memory
+and sends the data to the table
+
+O_RDWR -> Open for reading and writing.
+O_CREAT -> Create file if it does not exist.
+S_IWUSR -> User write permission bit macro (owner permission)
+S_IRUSR -> User read permission bit macro (owner permission)
+*/
+Pager* pager_open(const char* filename) {
+  // open a file for reading or writing O_RDWR
+  // if it doesn't exist, create it O_CREAT
+  // allow reading S_IRUSR and writing S_IWUSR permissions
+  int fd = open(filename, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+
+  if (fd == -1) {
+    printf("Unable to open file\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // Move the read/write file offset to the beginning of the DB file
+  off_t file_length = lseek(fd, 0, SEEK_END);
+
+  Pager* pager = malloc(sizeof(Pager));
+  pager->file_descriptor = fd;
+  pager->file_length = file_length;
+
+  // initialize pages in the pager
+  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+    pager->pages[i] = NULL;
+  }
+
+  return pager;
 }
 
 void free_table(Table* table) {
