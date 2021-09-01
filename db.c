@@ -19,11 +19,9 @@
 // required for `close`, `lseek`
 #include <unistd.h>
 
-#define COLUMN_USERNAME_SIZE 32
-#define COLUMN_EMAIL_SIZE 255
-
 // InputBuffer represents the an input object for the DBLite repl
 // InputBuffer is defined as a struct type
+// char* is used for the buffer because it represents a string of input
 typedef struct {
   char* buffer; // the input buffer (input from an IO device, in this case, the shell)
   size_t buffer_length;
@@ -56,12 +54,23 @@ typedef enum {
   STATEMENT_DELETE
 } StatementType;
 
+// ExecuteResult defines all possible results after executing an SQL statement
+typedef enum {
+  EXECUTE_SUCCESS,
+  EXECUTE_TABLE_FULL,
+} ExecuteResult;
+
 // Row defines the arguments for an insert operation
 // username is an array of characters that has COLUMN_USERNAME_SIZE allocated
+// in this case, we allocate only 32 characters
 // email is an array of characters; a string
+#define COLUMN_USERNAME_SIZE 32
+#define COLUMN_EMAIL_SIZE 255
+
 typedef struct {
   uint32_t id;
   // '+1' allocates an extra position for the null character
+  // we use a char array here because we want to edit it
   char username[COLUMN_USERNAME_SIZE + 1];
   char email[COLUMN_EMAIL_SIZE + 1];
 } Row;
@@ -71,11 +80,6 @@ typedef struct {
   StatementType type;
   Row row_to_insert; // only used by insert statement
 } Statement;
-
-typedef enum {
-  EXECUTE_SUCCESS,
-  EXECUTE_TABLE_FULL,
-} ExecuteResult;
 
 // returns the size of an attribute of a struct
 // e.g size_of_attribute(Row, id); -> uint32_t <some_value>
@@ -107,6 +111,7 @@ void serialize_row(Row* source, void* destination) {
   // destination is a memory address (pointer)
   // get the address of the id, copy into the destination from position ID_OFFSET (usually the beginning of destination)
   memcpy(destination + ID_OFFSET, &(source->id), ID_SIZE);
+
   // get the address of the username, copy into the destination from position USERNAME_OFFSET
   memcpy(destination + USERNAME_OFFSET, &(source->username), USERNAME_SIZE);
   memcpy(destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
@@ -152,7 +157,9 @@ typedef struct {
 // 'constructor' for InputBuffer
 // struct properties are accessed via ->
 InputBuffer* new_input_buffer() {
-  InputBuffer* input_buffer = (InputBuffer*)malloc(sizeof(InputBuffer)); // allocate memory for the input buffer 'instance'
+  // allocate memory of the size of the InputBuffer then cast the result to a 
+  // pointer to the InputBuffer
+  InputBuffer* input_buffer = (InputBuffer*)malloc(sizeof(InputBuffer));
   input_buffer->buffer = NULL; // initial buffer is empty
   input_buffer->buffer_length = 0; // limit on size of buffer
   input_buffer->input_length = 0;
@@ -276,6 +283,36 @@ void* row_slot(Table* table, uint32_t row_num) {
   return page + byte_offset;
 }
 
+void* get_page(Pager* pager, uint32_t page_num) {
+  if (page_num > TABLE_MAX_PAGES) {
+    printf("Tried to fetch page number out of bounds. %d > %d\n", page_num, TABLE_MAX_PAGES);
+    exit(EXIT_FAILURE);
+  }
+
+  if (pager->pages[page_num] == NULL) {
+    // Cache miss. Allocate memory and load from file.
+    void* page = malloc(PAGE_SIZE);
+    uint32_t num_pages = pager->file_length / PAGE_SIZE;
+
+    // We might save a partial page at the end of the file
+    if (pager->file_length % PAGE_SIZE) {
+      num_pages += 1;
+    }
+
+    if (page_num <= num_pages) {
+      lseek(pager->file_descriptor, page_num * PAGE_SIZE, SEEK_SET);
+      ssize_t bytes_read = read(pager->file_descriptor, page, PAGE_SIZE);
+      if (bytes_read == -1) {
+        printf("Error reading file: %d\n", errno);
+        exit(EXIT_FAILURE);
+      }
+    }
+
+    pager->pages[page_num] = page;
+  }
+  return pager->pages[page_num];
+}
+
 ExecuteResult execute_insert(Statement* statement, Table* table) {
   if (table->num_rows >= TABLE_MAX_ROWS) {
     return EXECUTE_TABLE_FULL;
@@ -336,6 +373,55 @@ Table* db_open(const char* filename) {
   table->num_rows = num_rows;
  
   return table;
+}
+
+/*
+db_close();
+
+flushes the page cache to disk
+closes the database file
+frees the memory for the Pager and Table data structures
+
+*/
+void db_close(Table* table) {
+  Pager* pager = table->pager;
+  uint32_t num_full_pages = table->num_rows / ROWS_PER_PAGE;
+
+  for (uint32_t i = 0; i < num_full_pages; i++) {
+    if (pager->pages[i] == NULL) {
+      continue;
+    }
+    pager_flush(pager, i, PAGE_SIZE);
+    free(pager->pages[i]);
+    pager->pages[i] = NULL;
+  }
+
+  // There may be a partial page to write to the end of the file
+  // This should not be needed after we switch to a B-tree
+  uint32_t num_additional_rows = table->num_rows % ROWS_PER_PAGE;
+  if (num_additional_rows > 0) {
+    uint32_t page_num = num_full_pages;
+    if (pager->pages[page_num] != NULL) {
+      pager_flush(pager, page_num, num_additional_rows * ROW_SIZE);
+      free(pager->pages[page_num]);
+      pager->pages[page_num] = NULL;
+    }
+  }
+
+  int result = close(pager->file_descriptor);
+  if (result == -1) {
+    printf("Error closing db file.\n");
+    exit(EXIT_FAILURE);
+  }
+  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+    void* page = pager->pages[i];
+    if (page) {
+      free(page);
+      pager->pages[i] = NULL;
+    }
+  }
+  free(pager);
+  free(table);
 }
 
 /*
