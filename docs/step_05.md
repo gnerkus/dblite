@@ -37,6 +37,8 @@ off_t lseek(int fildes, off_t offset, int whence);
 Move the read/write file offset. If whence is SEEK_END, the file offset is
 set to the size of the file plus offset.
 
+SEEK_SET moves the file pointer position to the beginning of the file.
+
 *Examples*
 ```c
 int fd = open(filename, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);

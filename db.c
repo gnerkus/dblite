@@ -202,10 +202,87 @@ void close_input_buffer(InputBuffer* input_buffer) {
     free(input_buffer);
 }
 
+/*
+Write the content of a page into memory
+*/
+void pager_flush(Pager* pager, uint32_t page_num, uint32_t size) {
+  if (pager->pages[page_num] == NULL) {
+    printf("Tried to flush null page\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // page_num = 1 && PAGE_SIZE = 4096
+  // results in the pointer moving to the beginning of the second page
+  off_t offset = lseek(pager->file_descriptor, page_num * PAGE_SIZE, SEEK_SET);
+
+  if (offset == -1) {
+    printf("Error seeking: %d\n", errno);
+    exit(EXIT_FAILURE);
+  }
+
+  // write the content of a page, at <size> size, into the file
+  // the file is identified by the descriptor (0 for stdin, 1 for stdout)
+  ssize_t bytes_written = write(pager->file_descriptor, pager->pages[page_num], size);
+
+  if (bytes_written == -1) {
+    printf("Error writing: %d\n", errno);
+    exit(EXIT_FAILURE);
+  }
+}
+
+/*
+db_close();
+
+flushes the page cache to disk
+closes the database file
+frees the memory for the Pager and Table data structures
+
+*/
+void db_close(Table* table) {
+  Pager* pager = table->pager;
+  uint32_t num_full_pages = table->num_rows / ROWS_PER_PAGE;
+
+  for (uint32_t i = 0; i < num_full_pages; i++) {
+    if (pager->pages[i] == NULL) {
+      continue;
+    }
+    pager_flush(pager, i, PAGE_SIZE);
+    free(pager->pages[i]);
+    pager->pages[i] = NULL;
+  }
+
+  // There may be a partial pages to write to the end of the file
+  // This should not be needed after we switch to a B-tree
+  uint32_t num_additional_rows = table->num_rows % ROWS_PER_PAGE;
+  if (num_additional_rows > 0) {
+    uint32_t page_num = num_full_pages;
+    if (pager->pages[page_num] != NULL) {
+      pager_flush(pager, page_num, num_additional_rows * ROW_SIZE);
+      free(pager->pages[page_num]);
+      pager->pages[page_num] = NULL;
+    }
+  }
+
+  int result = close(pager->file_descriptor);
+  if (result == -1) {
+    printf("Error closing db file.\n");
+    exit(EXIT_FAILURE);
+  }
+  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+    void* page = pager->pages[i];
+    if (page) {
+      free(page);
+      pager->pages[i] = NULL;
+    }
+  }
+  free(pager);
+  free(table);
+}
+
 // Check if the input buffer holds a meta command
-MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
+MetaCommandResult do_meta_command(InputBuffer* input_buffer, Table* table) {
   if (strcmp(input_buffer->buffer, ".exit") == 0) {
-    close_input_buffer(input_buffer);
+    db_close(table);
     exit(EXIT_SUCCESS);
   } else if (strcmp(input_buffer->buffer, ".help") == 0) {
     printf(".exit: Exits the REPL\n");
@@ -274,15 +351,6 @@ PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement)
   return PREPARE_UNRECOGNIZED_STATEMENT;
 }
 
-// figure out where to read/write in memory for a row
-void* row_slot(Table* table, uint32_t row_num) {
-  uint32_t page_num = row_num / ROWS_PER_PAGE;
-  void* page = get_page(table->pager, page_num);
-  uint32_t row_offset = row_num % ROWS_PER_PAGE; // returns 0 if row_num == ROWS_PER_PAGE
-  uint32_t byte_offset = row_offset * ROW_SIZE;
-  return page + byte_offset;
-}
-
 void* get_page(Pager* pager, uint32_t page_num) {
   if (page_num > TABLE_MAX_PAGES) {
     printf("Tried to fetch page number out of bounds. %d > %d\n", page_num, TABLE_MAX_PAGES);
@@ -311,6 +379,15 @@ void* get_page(Pager* pager, uint32_t page_num) {
     pager->pages[page_num] = page;
   }
   return pager->pages[page_num];
+}
+
+// figure out where to read/write in memory for a row
+void* row_slot(Table* table, uint32_t row_num) {
+  uint32_t page_num = row_num / ROWS_PER_PAGE;
+  void* page = get_page(table->pager, page_num);
+  uint32_t row_offset = row_num % ROWS_PER_PAGE; // returns 0 if row_num == ROWS_PER_PAGE
+  uint32_t byte_offset = row_offset * ROW_SIZE;
+  return page + byte_offset;
 }
 
 ExecuteResult execute_insert(Statement* statement, Table* table) {
@@ -354,77 +431,6 @@ ExecuteResult execute_statement(Statement* statement, Table *table) {
 }
 
 /*
-db_open():
-
-1. Opens a database file
-2. Initializing a pager data structure
-3. Initializing a table data structure
-
-The pager is the go between the memory and the table
-
-filename -> The file name for the DB
-*/
-Table* db_open(const char* filename) {
-  Pager* pager = pager_open(filename);
-  uint32_t num_rows = pager->file_length / ROW_SIZE;
-
-  Table* table = malloc(sizeof(Table)); // (size_t)808UL (unsigned long)
-  table->pager = pager;
-  table->num_rows = num_rows;
- 
-  return table;
-}
-
-/*
-db_close();
-
-flushes the page cache to disk
-closes the database file
-frees the memory for the Pager and Table data structures
-
-*/
-void db_close(Table* table) {
-  Pager* pager = table->pager;
-  uint32_t num_full_pages = table->num_rows / ROWS_PER_PAGE;
-
-  for (uint32_t i = 0; i < num_full_pages; i++) {
-    if (pager->pages[i] == NULL) {
-      continue;
-    }
-    pager_flush(pager, i, PAGE_SIZE);
-    free(pager->pages[i]);
-    pager->pages[i] = NULL;
-  }
-
-  // There may be a partial page to write to the end of the file
-  // This should not be needed after we switch to a B-tree
-  uint32_t num_additional_rows = table->num_rows % ROWS_PER_PAGE;
-  if (num_additional_rows > 0) {
-    uint32_t page_num = num_full_pages;
-    if (pager->pages[page_num] != NULL) {
-      pager_flush(pager, page_num, num_additional_rows * ROW_SIZE);
-      free(pager->pages[page_num]);
-      pager->pages[page_num] = NULL;
-    }
-  }
-
-  int result = close(pager->file_descriptor);
-  if (result == -1) {
-    printf("Error closing db file.\n");
-    exit(EXIT_FAILURE);
-  }
-  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
-    void* page = pager->pages[i];
-    if (page) {
-      free(page);
-      pager->pages[i] = NULL;
-    }
-  }
-  free(pager);
-  free(table);
-}
-
-/*
 The pager communicates directly with memory
 and sends the data to the table
 
@@ -459,17 +465,39 @@ Pager* pager_open(const char* filename) {
   return pager;
 }
 
-void free_table(Table* table) {
-  for (int i = 0; table->pages[i]; i++) {
-    free(table->pages[i]);
-  }
-  free(table);
+/*
+db_open():
+
+1. Opens a database file
+2. Initializing a pager data structure
+3. Initializing a table data structure
+
+The pager is the go between the memory and the table
+
+filename -> The file name for the DB
+*/
+Table* db_open(const char* filename) {
+  Pager* pager = pager_open(filename);
+  uint32_t num_rows = pager->file_length / ROW_SIZE;
+
+  Table* table = malloc(sizeof(Table)); // (size_t)808UL (unsigned long)
+  table->pager = pager;
+  table->num_rows = num_rows;
+ 
+  return table;
 }
 
 // main function will have an infinite loop that prints the prompt,
 // gets a line of input, then processes that line of input:
 int main(int argc, char* argv[]) {
-  Table* table = new_table();
+  if (argc < 2) {
+    printf("Must supply a database filename.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  char* filename = argv[1];
+  Table* table = db_open(filename);
+
   InputBuffer* input_buffer = new_input_buffer(); // initialize input buffer
   for (;;)
   {
@@ -478,7 +506,7 @@ int main(int argc, char* argv[]) {
 
     // if the input begins with ".", we process it as a meta command (.help, .exit e.t.c)
     if (input_buffer->buffer[0] == '.') {
-      switch (do_meta_command(input_buffer))
+      switch (do_meta_command(input_buffer, table))
       {
       case (META_COMMAND_SUCCESS):
         // request input again
