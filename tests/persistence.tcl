@@ -10,6 +10,10 @@ if {!$isExecutable} {
   puts "error"
 }
 
+# Get directory of the test database file
+set dbFile "test.db"
+set dbFileDirectory "$workingDir/$dbFile"
+
 proc testOutput {description expected actual} {
   set TEST_FAIL_COLOR "\033\[37;41m"
   set TEST_PASS_COLOR "\033\[37;42m"
@@ -28,6 +32,10 @@ proc testOutput {description expected actual} {
 }
 
 # Basic insert test
+
+# Remove the test database
+file delete $dbFileDirectory
+
 set singleInsertDesc "keeps data after closing the connection"
 set singleInsertInitialExpected "db > Executed.
 db > "
@@ -35,8 +43,8 @@ set singleInsertFinalExpected "db > (1, foo, a@b.c)
 Executed.
 db > "
 
-set singleInsertInitialResult [exec $dbliteFileName << "insert 1 foo a@b.c\n.exit\n"]
+set singleInsertInitialResult [exec $dbliteFileName $dbFile << "insert 1 foo a@b.c\n.exit\n"]
 puts [testOutput $singleInsertDesc $singleInsertInitialExpected $singleInsertInitialResult]
 
-set singleInsertFinalResult [exec $dbliteFileName << "select\n.exit\n"]
+set singleInsertFinalResult [exec $dbliteFileName $dbFile << "select\n.exit\n"]
 puts [testOutput $singleInsertDesc $singleInsertFinalExpected $singleInsertFinalResult]
