@@ -9,4 +9,4 @@ dblite.o:
 	clang db.c -o dblite
 
 test:
-	tclsh tests/test.tcl
+	./run_test.sh
