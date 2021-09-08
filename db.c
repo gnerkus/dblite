@@ -412,6 +412,7 @@ void* get_page(Pager* pager, uint32_t page_num) {
 }
 
 // figure out where to read/write in memory for a row
+// the cursor contains a pointer to the current row
 void* cursor_value(Cursor* cursor) {
   uint32_t row_num = cursor->row_num;
   uint32_t page_num = row_num / ROWS_PER_PAGE;
@@ -422,6 +423,7 @@ void* cursor_value(Cursor* cursor) {
   return page + byte_offset;
 }
 
+// move cursor to the next row
 void cursor_advance(Cursor* cursor) {
   cursor->row_num += 1;
   if (cursor->row_num >= cursor->table->num_rows) {
@@ -435,6 +437,7 @@ ExecuteResult execute_insert(Statement* statement, Table* table) {
   }
 
   Row* row_to_insert = &(statement->row_to_insert);
+  // insert data from the end of the table
   Cursor* cursor = table_end(table);
 
   serialize_row(row_to_insert, cursor_value(cursor));
