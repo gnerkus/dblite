@@ -60,6 +60,8 @@ An element at index i is less than all the elements in subtree number i + 1 of t
 
 ### References
 [Lecture Notes: B-Trees](https://www.cpp.edu/~ftang/courses/CS241/notes/b-tree.htm)
+[How Indexing Works in SQL](https://stackoverflow.com/questions/1108/how-does-database-indexing-work)
+[Book Index / DB Index Analogy](https://stackoverflow.com/a/43572540/2259144)
 
 The plan:
 
