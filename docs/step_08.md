@@ -9,6 +9,7 @@ The plan:
   - Leaf nodes will store how many cells they contain
   - The body of a leaf node is an array of cells. Each cell is a key followed by a value (serialized row).
   Each leaf of the tree is a page in the table; it has a pointer to its parent. The parent is used to find the row's sibling pages.
+- Every node is going to take up exactly one page, even if not full.
 
 
 

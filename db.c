@@ -128,10 +128,7 @@ void deserialize_row(void* source, Row* destination) {
 }
 
 const uint32_t PAGE_SIZE = 4096;
-
-#define TABLE_MAX_PAGES 100
-const uint32_t ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE;
-const uint32_t TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
+const uint32_t TABLE_MAX_PAGES = 100;
 
 /*
 The Pager accesses the page cache and the file.
@@ -145,6 +142,7 @@ file_length -> the size of each page
 typedef struct {
   int file_descriptor;
   uint32_t file_length;
+  uint32_t num_pages;
   void* pages[TABLE_MAX_PAGES];
 } Pager;
 
@@ -154,7 +152,7 @@ This is temporary.
 */
 typedef struct {
   Pager* pager;
-  uint32_t num_rows;
+  uint32_t root_page_num;
 } Table;
 
 // a cursor represents a location in a table
@@ -239,24 +237,30 @@ const uint32_t LEAF_NODE_CELL_SIZE = LEAF_NODE_KEY_SIZE + LEAF_NODE_VALUE_SIZE;
 const uint32_t LEAF_NODE_SPACE_FOR_CELLS = PAGE_SIZE - LEAF_NODE_HEADER_SIZE;
 const uint32_t LEAF_NODE_MAX_CELLS = LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE;
 
+// returns a pointer to the start of the leaf node's cells
 uint32_t* leaf_node_num_cells(void* node) {
   return node + LEAF_NODE_NUM_CELLS_OFFSET;
 }
 
+// returns a pointer to the start of a cell's key based on
+// the cell's number
 void* leaf_node_cell(void* node, uint32_t cell_num) {
   return node + LEAF_NODE_HEADER_SIZE + cell_num * LEAF_NODE_CELL_SIZE;
 }
 
-// returns a pointer to the start of a cell (row)
+// returns a pointer to the start of a cell's (row) key
 uint32_t* leaf_node_key(void* node, uint32_t cell_num) {
   return leaf_node_cell(node, cell_num);
 }
 
+// returns a pointer to the start of a cell's value
 void* leaf_node_value(void* node, uint32_t cell_num) {
   return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE;
 }
 
-void initialize_leaf_node(void* node) { *leaf_node_num_cells(node) = 0; }
+void initialize_leaf_node(void* node) {
+  *leaf_node_num_cells(node) = 0;
+}
 // </TREE DEFINITIONS>
 
 // display a prompt requesting input
@@ -298,7 +302,7 @@ void close_input_buffer(InputBuffer* input_buffer) {
 /*
 Write the content of a page into memory
 */
-void pager_flush(Pager* pager, uint32_t page_num, uint32_t size) {
+void pager_flush(Pager* pager, uint32_t page_num) {
   if (pager->pages[page_num] == NULL) {
     printf("Tried to flush null page\n");
     exit(EXIT_FAILURE);
@@ -315,7 +319,7 @@ void pager_flush(Pager* pager, uint32_t page_num, uint32_t size) {
 
   // write the content of a page, at <size> size, into the file
   // the file is identified by the descriptor (0 for stdin, 1 for stdout)
-  ssize_t bytes_written = write(pager->file_descriptor, pager->pages[page_num], size);
+  ssize_t bytes_written = write(pager->file_descriptor, pager->pages[page_num], PAGE_SIZE);
 
   if (bytes_written == -1) {
     printf("Error writing: %d\n", errno);
@@ -333,27 +337,14 @@ frees the memory for the Pager and Table data structures
 */
 void db_close(Table* table) {
   Pager* pager = table->pager;
-  uint32_t num_full_pages = table->num_rows / ROWS_PER_PAGE;
 
-  for (uint32_t i = 0; i < num_full_pages; i++) {
+  for (uint32_t i = 0; i < pager->num_pages; i++) {
     if (pager->pages[i] == NULL) {
       continue;
     }
-    pager_flush(pager, i, PAGE_SIZE);
+    pager_flush(pager, i);
     free(pager->pages[i]);
     pager->pages[i] = NULL;
-  }
-
-  // There may be a partial pages to write to the end of the file
-  // This should not be needed after we switch to a B-tree
-  uint32_t num_additional_rows = table->num_rows % ROWS_PER_PAGE;
-  if (num_additional_rows > 0) {
-    uint32_t page_num = num_full_pages;
-    if (pager->pages[page_num] != NULL) {
-      pager_flush(pager, page_num, num_additional_rows * ROW_SIZE);
-      free(pager->pages[page_num]);
-      pager->pages[page_num] = NULL;
-    }
   }
 
   int result = close(pager->file_descriptor);
@@ -470,6 +461,10 @@ void* get_page(Pager* pager, uint32_t page_num) {
     }
 
     pager->pages[page_num] = page;
+
+    if (page_num >= pager->num_pages) {
+      pager->num_pages = page_num + 1;
+    }
   }
   return pager->pages[page_num];
 }
@@ -568,7 +563,14 @@ Pager* pager_open(const char* filename) {
 
   Pager* pager = malloc(sizeof(Pager));
   pager->file_descriptor = fd;
-  pager->file_length = file_length;
+  pager->file_length = file_length; // size of the db file
+  pager->num_pages = (file_length / PAGE_SIZE);
+
+  // DB file must have an exact number of pages
+  if (file_length % PAGE_SIZE != 0) {
+    printf("Db file is not a whole number of pages. Corrupt file.\n");
+    exit(EXIT_FAILURE);
+  }
 
   // initialize pages in the pager
   for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
