@@ -3,6 +3,8 @@
 The main plan:
 _Change the format of the table from unsorted array of rows to a B-Tree._
 
+Each leaf node on the tree stores a number of rows; a page. Internal nodes don't store rows but help find them.
+
 The plan:
 - Define the layout of a leaf node and support inserting key/value pairs into a single-node tree.
   - Every node will store what type of node it is, whether or not it is the root node, and a pointer to its parent.
