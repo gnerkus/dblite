@@ -217,11 +217,14 @@ typedef enum {
 
 /*
 Common Node Header Layout
+
+This is defined for all nodes; leaves (pages) and internal
 */
 // how many bits do we need to store the node type size?
 const uint32_t NODE_TYPE_SIZE = sizeof(uint8_t);
 // we store the node type at the beginning of the memory block
 const uint32_t NODE_TYPE_OFFSET = 0;
+// if this node is the root node
 const uint32_t IS_ROOT_SIZE = sizeof(uint8_t);
 // the 'is root' check is stored right after the node type 
 const uint32_t IS_ROOT_OFFSET = NODE_TYPE_SIZE;
@@ -232,6 +235,9 @@ const uint8_t COMMON_NODE_HEADER_SIZE = NODE_TYPE_SIZE + IS_ROOT_SIZE + PARENT_P
 
 /*
 Leaf Node format
+
+A leaf node is a page so it needs to keep track of how many rows (cells)
+it contains
 */
 // how many cells are in a page
 const uint32_t LEAF_NODE_NUM_CELLS_SIZE = sizeof(uint32_t);
@@ -243,6 +249,7 @@ Leaf Node Body Layout
 */
 const uint32_t LEAF_NODE_KEY_SIZE = sizeof(uint32_t);
 const uint32_t LEAF_NODE_KEY_OFFSET = 0;
+// The size of a row (cell)
 const uint32_t LEAF_NODE_VALUE_SIZE = ROW_SIZE;
 const uint32_t LEAF_NODE_VALUE_OFFSET = LEAF_NODE_KEY_OFFSET + LEAF_NODE_KEY_SIZE;
 const uint32_t LEAF_NODE_CELL_SIZE = LEAF_NODE_KEY_SIZE + LEAF_NODE_VALUE_SIZE;
@@ -376,6 +383,15 @@ void db_close(Table* table) {
   free(table);
 }
 
+void print_constants() {
+  printf("ROW_SIZE: %d\n", ROW_SIZE);
+  printf("COMMON_NODE_HEADER_SIZE: %d\n", COMMON_NODE_HEADER_SIZE);
+  printf("LEAF_NODE_HEADER_SIZE: %d\n", LEAF_NODE_HEADER_SIZE);
+  printf("LEAF_NODE_CELL_SIZE: %d\n", LEAF_NODE_CELL_SIZE);
+  printf("LEAF_NODE_SPACE_FOR_CELLS: %d\n", LEAF_NODE_SPACE_FOR_CELLS);
+  printf("LEAF_NODE_MAX_CELLS: %d\n", LEAF_NODE_MAX_CELLS);
+}
+
 // Check if the input buffer holds a meta command
 MetaCommandResult do_meta_command(InputBuffer* input_buffer, Table* table) {
   if (strcmp(input_buffer->buffer, ".exit") == 0) {
@@ -383,6 +399,10 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer, Table* table) {
     exit(EXIT_SUCCESS);
   } else if (strcmp(input_buffer->buffer, ".help") == 0) {
     printf(".exit: Exits the REPL\n");
+    return META_COMMAND_SUCCESS;
+  } else if (strcmp(input_buffer->buffer, ".constants") == 0) {
+    printf("Constants:\n");
+    print_constants();
     return META_COMMAND_SUCCESS;
   } else {
     return META_COMMAND_UNRECOGNIZED_COMMAND;
@@ -503,7 +523,8 @@ void cursor_advance(Cursor* cursor) {
 }
 
 ExecuteResult execute_insert(Statement* statement, Table* table) {
-  if (table->num_rows >= TABLE_MAX_ROWS) {
+  void* node = get_page(table->pager, table->root_page_num);
+  if ((*leaf_node_num_cells(node) >= LEAF_NODE_MAX_CELLS)) {
     return EXECUTE_TABLE_FULL;
   }
 
@@ -511,8 +532,10 @@ ExecuteResult execute_insert(Statement* statement, Table* table) {
   // insert data from the end of the table
   Cursor* cursor = table_end(table);
 
-  serialize_row(row_to_insert, cursor_value(cursor));
-  table->num_rows += 1;
+  // insert the row's id as the key to the cell
+  leaf_node_insert(cursor, row_to_insert->id, row_to_insert);
+
+  free(cursor);
 
   return EXIT_SUCCESS;
 }
@@ -606,16 +629,52 @@ filename -> The file name for the DB
 */
 Table* db_open(const char* filename) {
   Pager* pager = pager_open(filename);
-  uint32_t num_rows = pager->file_length / ROW_SIZE;
 
   Table* table = malloc(sizeof(Table)); // (size_t)808UL (unsigned long)
   table->pager = pager;
-  table->num_rows = num_rows;
+  // the root page is indexed 0 (first) when the db is first opened
+  table->root_page_num = 0;
+
+  if (pager->num_pages == 0) {
+    // New database file. Initialize page 0 as leaf node
+    void* root_node = get_page(pager, 0);
+    initialize_leaf_node(root_node);
+  }
  
   return table;
 }
 
+/*
+Inserting a row into the database
 
+The row is inserted as a cell into the leaf node
+*/
+void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
+  // current page
+  void* node = get_page(cursor->table->pager, cursor->page_num);
+
+  uint32_t num_cells = *leaf_node_num_cells(node);
+  if (num_cells >= LEAF_NODE_MAX_CELLS) {
+    // Node full
+    printf("Need to implement splitting a leaf node.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if (cursor->cell_num < num_cells) {
+    // Make room for new cell
+    for (uint32_t i = num_cells; i > cursor->cell_num; i--) {
+      // e.g copy content from [2] to [3]
+      // if cell num is 1, copy from [1] to [2] then stop (last copy)
+      // new content will be written at [1]
+      memcpy(leaf_node_cell(node, i), leaf_node_cell(node, i - 1), LEAF_NODE_CELL_SIZE);
+    }
+  }
+
+  // increase the number of cells in the page (node)
+  *(leaf_node_num_cells(node)) += 1;
+  *(leaf_node_key(node, cursor->cell_num)) = key;
+  serialize_row(value, leaf_node_value(node, cursor->cell_num));
+}
 
 // main function will have an infinite loop that prints the prompt,
 // gets a line of input, then processes that line of input:
