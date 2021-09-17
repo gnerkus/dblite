@@ -25,8 +25,9 @@
 // InputBuffer represents the an input object for the DBLite repl
 // InputBuffer is defined as a struct type
 // char* is used for the buffer because it represents a string of input
-typedef struct {
-  char* buffer; // the input buffer (input from an IO device, in this case, the shell)
+typedef struct
+{
+  char *buffer; // the input buffer (input from an IO device, in this case, the shell)
   size_t buffer_length;
   ssize_t input_length;
 } InputBuffer;
@@ -34,14 +35,16 @@ typedef struct {
 // MetaCommandResult defines all possible results of running a meta command
 // If a meta command is recognized, use meta_command_success
 // meta commands in SQlite include .exit, .help e.t.c commands that are run in the shell and start with '.'
-typedef enum {
+typedef enum
+{
   META_COMMAND_SUCCESS,
   META_COMMAND_UNRECOGNIZED_COMMAND
 } MetaCommandResult;
 
 // PrepareResult defines all possible outcomes of running a prepared statement
 // If a prepares statement is run successfully, use prepare_success
-typedef enum {
+typedef enum
+{
   PREPARE_SUCCESS,
   PREPARE_STRING_TOO_LONG,
   PREPARE_NEGATIVE_ID,
@@ -50,7 +53,8 @@ typedef enum {
 } PrepareResult;
 
 // StatementType defines all possible SQL statements allowed by this compiler
-typedef enum {
+typedef enum
+{
   STATEMENT_INSERT,
   STATEMENT_SELECT,
   STATEMENT_UPDATE,
@@ -58,7 +62,8 @@ typedef enum {
 } StatementType;
 
 // ExecuteResult defines all possible results after executing an SQL statement
-typedef enum {
+typedef enum
+{
   EXECUTE_SUCCESS,
   EXECUTE_TABLE_FULL,
 } ExecuteResult;
@@ -70,7 +75,8 @@ typedef enum {
 #define COLUMN_USERNAME_SIZE 32
 #define COLUMN_EMAIL_SIZE 255
 
-typedef struct {
+typedef struct
+{
   uint32_t id;
   // '+1' allocates an extra position for the null character
   // we use a char array here because we want to edit it
@@ -79,14 +85,15 @@ typedef struct {
 } Row;
 
 // Statement defines a statement to be processed by the compiler
-typedef struct {
+typedef struct
+{
   StatementType type;
   Row row_to_insert; // only used by insert statement
 } Statement;
 
 // returns the size of an attribute of a struct
 // e.g size_of_attribute(Row, id); -> uint32_t <some_value>
-#define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
+#define size_of_attribute(Struct, Attribute) sizeof(((Struct *)0)->Attribute)
 
 // serialized representation of a row in the table
 /*
@@ -105,12 +112,14 @@ const uint32_t USERNAME_OFFSET = ID_OFFSET + ID_SIZE;
 const uint32_t EMAIL_OFFSET = USERNAME_OFFSET + USERNAME_SIZE;
 const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
 
-void print_row(Row* row) {
+void print_row(Row *row)
+{
   printf("(%d, %s, %s)\n", row->id, row->username, row->email);
 }
 
 // store the row in a memory location
-void serialize_row(Row* source, void* destination) {
+void serialize_row(Row *source, void *destination)
+{
   // destination is a memory address (pointer)
   // get the address of the id, copy into the destination from position ID_OFFSET (usually the beginning of destination)
   memcpy(destination + ID_OFFSET, &(source->id), ID_SIZE);
@@ -120,7 +129,8 @@ void serialize_row(Row* source, void* destination) {
   memcpy(destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
 }
 
-void deserialize_row(void* source, Row* destination) {
+void deserialize_row(void *source, Row *destination)
+{
   // get all the content from memory block position ID_OFFSET, of size ID_SIZE, and copy into destination->id
   memcpy(&(destination->id), source + ID_OFFSET, ID_SIZE);
   memcpy(&(destination->username), source + USERNAME_OFFSET, USERNAME_SIZE);
@@ -139,25 +149,28 @@ Reads are made via pages.
 
 file_length -> the size of each page
 */
-typedef struct {
+typedef struct
+{
   int file_descriptor;
   uint32_t file_length;
   uint32_t num_pages;
-  void* pages[TABLE_MAX_PAGES];
+  void *pages[TABLE_MAX_PAGES];
 } Pager;
 
 /*
 The Table replaces the B-Tree in the real SQLite implementation.
 This is temporary.
 */
-typedef struct {
-  Pager* pager;
+typedef struct
+{
+  Pager *pager;
   uint32_t root_page_num;
 } Table;
 
 // a cursor represents a location in a table
-typedef struct {
-  Table* table;
+typedef struct
+{
+  Table *table;
   uint32_t page_num; // pointer to the current page
   uint32_t cell_num; // pointer to the current cell (row)
   bool end_of_table; // Indicates a position one post the last element
@@ -165,11 +178,12 @@ typedef struct {
 
 // 'constructor' for InputBuffer
 // struct properties are accessed via ->
-InputBuffer* new_input_buffer() {
-  // allocate memory of the size of the InputBuffer then cast the result to a 
+InputBuffer *new_input_buffer()
+{
+  // allocate memory of the size of the InputBuffer then cast the result to a
   // pointer to the InputBuffer
-  InputBuffer* input_buffer = (InputBuffer*)malloc(sizeof(InputBuffer));
-  input_buffer->buffer = NULL; // initial buffer is empty
+  InputBuffer *input_buffer = (InputBuffer *)malloc(sizeof(InputBuffer));
+  input_buffer->buffer = NULL;     // initial buffer is empty
   input_buffer->buffer_length = 0; // limit on size of buffer
   input_buffer->input_length = 0;
 
@@ -178,7 +192,8 @@ InputBuffer* new_input_buffer() {
 
 // <TREE DEFINITIONS>
 // Node types for the B-Tree implementation of a table
-typedef enum {
+typedef enum
+{
   NODE_INTERNAL,
   NODE_LEAF
 } NodeType;
@@ -194,7 +209,7 @@ const uint32_t NODE_TYPE_SIZE = sizeof(uint8_t);
 const uint32_t NODE_TYPE_OFFSET = 0;
 // if this node is the root node
 const uint32_t IS_ROOT_SIZE = sizeof(uint8_t);
-// the 'is root' check is stored right after the node type 
+// the 'is root' check is stored right after the node type
 const uint32_t IS_ROOT_OFFSET = NODE_TYPE_SIZE;
 const uint32_t PARENT_POINTER_SIZE = sizeof(uint32_t);
 const uint32_t PARENT_POINTER_OFFSET = IS_ROOT_SIZE + IS_ROOT_OFFSET;
@@ -226,27 +241,32 @@ const uint32_t LEAF_NODE_SPACE_FOR_CELLS = PAGE_SIZE - LEAF_NODE_HEADER_SIZE;
 const uint32_t LEAF_NODE_MAX_CELLS = LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE;
 
 // returns a pointer to the start of the leaf node's cells
-uint32_t* leaf_node_num_cells(void* node) {
+uint32_t *leaf_node_num_cells(void *node)
+{
   return node + LEAF_NODE_NUM_CELLS_OFFSET;
 }
 
 // returns a pointer to the start of a cell's key based on
 // the cell's number
-void* leaf_node_cell(void* node, uint32_t cell_num) {
+void *leaf_node_cell(void *node, uint32_t cell_num)
+{
   return node + LEAF_NODE_HEADER_SIZE + cell_num * LEAF_NODE_CELL_SIZE;
 }
 
 // returns a pointer to the start of a cell's (row) key
-uint32_t* leaf_node_key(void* node, uint32_t cell_num) {
+uint32_t *leaf_node_key(void *node, uint32_t cell_num)
+{
   return leaf_node_cell(node, cell_num);
 }
 
 // returns a pointer to the start of a cell's value
-void* leaf_node_value(void* node, uint32_t cell_num) {
+void *leaf_node_value(void *node, uint32_t cell_num)
+{
   return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE;
 }
 
-void initialize_leaf_node(void* node) {
+void initialize_leaf_node(void *node)
+{
   *leaf_node_num_cells(node) = 0;
 }
 // </TREE DEFINITIONS>
@@ -254,7 +274,8 @@ void initialize_leaf_node(void* node) {
 // display a prompt requesting input
 void print_prompt() { printf("db > "); }
 
-void read_input(InputBuffer* input_buffer) {
+void read_input(InputBuffer *input_buffer)
+{
   ssize_t bytes_read =
       getline(&(input_buffer->buffer), &(input_buffer->buffer_length), stdin);
 
@@ -268,11 +289,12 @@ void read_input(InputBuffer* input_buffer) {
   input_buffer points to the buffer; it's a pointer
   */
 
- /*
+  /*
  getline returns a ssize_t, the size of the buffer read from input
  */
 
-  if (bytes_read <= 0) {
+  if (bytes_read <= 0)
+  {
     printf("Error reading input\n");
     exit(EXIT_FAILURE);
   }
@@ -282,16 +304,19 @@ void read_input(InputBuffer* input_buffer) {
   input_buffer->buffer[bytes_read - 1] = 0;
 }
 
-void close_input_buffer(InputBuffer* input_buffer) {
-    free(input_buffer->buffer);
-    free(input_buffer);
+void close_input_buffer(InputBuffer *input_buffer)
+{
+  free(input_buffer->buffer);
+  free(input_buffer);
 }
 
 /*
 Write the content of a page into memory
 */
-void pager_flush(Pager* pager, uint32_t page_num) {
-  if (pager->pages[page_num] == NULL) {
+void pager_flush(Pager *pager, uint32_t page_num)
+{
+  if (pager->pages[page_num] == NULL)
+  {
     printf("Tried to flush null page\n");
     exit(EXIT_FAILURE);
   }
@@ -300,7 +325,8 @@ void pager_flush(Pager* pager, uint32_t page_num) {
   // results in the pointer moving to the beginning of the second page
   off_t offset = lseek(pager->file_descriptor, page_num * PAGE_SIZE, SEEK_SET);
 
-  if (offset == -1) {
+  if (offset == -1)
+  {
     printf("Error seeking: %d\n", errno);
     exit(EXIT_FAILURE);
   }
@@ -309,7 +335,8 @@ void pager_flush(Pager* pager, uint32_t page_num) {
   // the file is identified by the descriptor (0 for stdin, 1 for stdout)
   ssize_t bytes_written = write(pager->file_descriptor, pager->pages[page_num], PAGE_SIZE);
 
-  if (bytes_written == -1) {
+  if (bytes_written == -1)
+  {
     printf("Error writing: %d\n", errno);
     exit(EXIT_FAILURE);
   }
@@ -323,11 +350,14 @@ closes the database file
 frees the memory for the Pager and Table data structures
 
 */
-void db_close(Table* table) {
-  Pager* pager = table->pager;
+void db_close(Table *table)
+{
+  Pager *pager = table->pager;
 
-  for (uint32_t i = 0; i < pager->num_pages; i++) {
-    if (pager->pages[i] == NULL) {
+  for (uint32_t i = 0; i < pager->num_pages; i++)
+  {
+    if (pager->pages[i] == NULL)
+    {
       continue;
     }
     pager_flush(pager, i);
@@ -336,13 +366,16 @@ void db_close(Table* table) {
   }
 
   int result = close(pager->file_descriptor);
-  if (result == -1) {
+  if (result == -1)
+  {
     printf("Error closing db file.\n");
     exit(EXIT_FAILURE);
   }
-  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
-    void* page = pager->pages[i];
-    if (page) {
+  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
+  {
+    void *page = pager->pages[i];
+    if (page)
+    {
       free(page);
       pager->pages[i] = NULL;
     }
@@ -351,7 +384,8 @@ void db_close(Table* table) {
   free(table);
 }
 
-void print_constants() {
+void print_constants()
+{
   printf("ROW_SIZE: %d\n", ROW_SIZE);
   printf("COMMON_NODE_HEADER_SIZE: %d\n", COMMON_NODE_HEADER_SIZE);
   printf("LEAF_NODE_HEADER_SIZE: %d\n", LEAF_NODE_HEADER_SIZE);
@@ -361,18 +395,26 @@ void print_constants() {
 }
 
 // Check if the input buffer holds a meta command
-MetaCommandResult do_meta_command(InputBuffer* input_buffer, Table* table) {
-  if (strcmp(input_buffer->buffer, ".exit") == 0) {
+MetaCommandResult do_meta_command(InputBuffer *input_buffer, Table *table)
+{
+  if (strcmp(input_buffer->buffer, ".exit") == 0)
+  {
     db_close(table);
     exit(EXIT_SUCCESS);
-  } else if (strcmp(input_buffer->buffer, ".help") == 0) {
+  }
+  else if (strcmp(input_buffer->buffer, ".help") == 0)
+  {
     printf(".exit: Exits the REPL\n");
     return META_COMMAND_SUCCESS;
-  } else if (strcmp(input_buffer->buffer, ".constants") == 0) {
+  }
+  else if (strcmp(input_buffer->buffer, ".constants") == 0)
+  {
     printf("Constants:\n");
     print_constants();
     return META_COMMAND_SUCCESS;
-  } else {
+  }
+  else
+  {
     return META_COMMAND_UNRECOGNIZED_COMMAND;
   }
 }
@@ -380,27 +422,32 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer, Table* table) {
 // tokenize the insert statement using strtok
 // then validate input tokens before performing an insert operation
 // check for input length and throw error if too long
-PrepareResult prepare_insert(InputBuffer* input_buffer, Statement* statement) {
+PrepareResult prepare_insert(InputBuffer *input_buffer, Statement *statement)
+{
   statement->type = STATEMENT_INSERT;
 
-  char* keyword = strtok(input_buffer->buffer, " ");
-  char* id_string = strtok(NULL, " ");
-  char* username = strtok(NULL, " ");
-  char* email = strtok(NULL, " ");
+  char *keyword = strtok(input_buffer->buffer, " ");
+  char *id_string = strtok(NULL, " ");
+  char *username = strtok(NULL, " ");
+  char *email = strtok(NULL, " ");
 
-  if (id_string == NULL || username == NULL || email == NULL) {
+  if (id_string == NULL || username == NULL || email == NULL)
+  {
     return PREPARE_SYNTAX_ERROR;
   }
 
   int id = atoi(id_string);
-  if (id < 0) {
+  if (id < 0)
+  {
     return PREPARE_NEGATIVE_ID;
   }
 
-  if (strlen(username) > COLUMN_USERNAME_SIZE) {
+  if (strlen(username) > COLUMN_USERNAME_SIZE)
+  {
     return PREPARE_STRING_TOO_LONG;
   }
-  if (strlen(email) > COLUMN_EMAIL_SIZE) {
+  if (strlen(email) > COLUMN_EMAIL_SIZE)
+  {
     return PREPARE_STRING_TOO_LONG;
   }
 
@@ -413,22 +460,27 @@ PrepareResult prepare_insert(InputBuffer* input_buffer, Statement* statement) {
 
 // Set the statement type based on the content of the input buffer
 // &(statement->row_to_insert.id) stores the value of the digit read into the address
-PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement) {
-  if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
+PrepareResult prepare_statement(InputBuffer *input_buffer, Statement *statement)
+{
+  if (strncmp(input_buffer->buffer, "insert", 6) == 0)
+  {
     return prepare_insert(input_buffer, statement);
   }
 
-  if (strncmp(input_buffer->buffer, "select", 6) == 0) {
+  if (strncmp(input_buffer->buffer, "select", 6) == 0)
+  {
     statement->type = STATEMENT_SELECT;
     return PREPARE_SUCCESS;
   }
 
-  if (strncmp(input_buffer->buffer, "update", 6) == 0) {
+  if (strncmp(input_buffer->buffer, "update", 6) == 0)
+  {
     statement->type = STATEMENT_UPDATE;
     return PREPARE_SUCCESS;
   }
 
-  if (strncmp(input_buffer->buffer, "delete", 6) == 0) {
+  if (strncmp(input_buffer->buffer, "delete", 6) == 0)
+  {
     statement->type = STATEMENT_DELETE;
     return PREPARE_SUCCESS;
   }
@@ -436,26 +488,32 @@ PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement)
   return PREPARE_UNRECOGNIZED_STATEMENT;
 }
 
-void* get_page(Pager* pager, uint32_t page_num) {
-  if (page_num > TABLE_MAX_PAGES) {
+void *get_page(Pager *pager, uint32_t page_num)
+{
+  if (page_num > TABLE_MAX_PAGES)
+  {
     printf("Tried to fetch page number out of bounds. %d > %d\n", page_num, TABLE_MAX_PAGES);
     exit(EXIT_FAILURE);
   }
 
-  if (pager->pages[page_num] == NULL) {
+  if (pager->pages[page_num] == NULL)
+  {
     // Cache miss. Allocate memory and load from file.
-    void* page = malloc(PAGE_SIZE);
+    void *page = malloc(PAGE_SIZE);
     uint32_t num_pages = pager->file_length / PAGE_SIZE;
 
     // We might save a partial page at the end of the file
-    if (pager->file_length % PAGE_SIZE) {
+    if (pager->file_length % PAGE_SIZE)
+    {
       num_pages += 1;
     }
 
-    if (page_num <= num_pages) {
+    if (page_num <= num_pages)
+    {
       lseek(pager->file_descriptor, page_num * PAGE_SIZE, SEEK_SET);
       ssize_t bytes_read = read(pager->file_descriptor, page, PAGE_SIZE);
-      if (bytes_read == -1) {
+      if (bytes_read == -1)
+      {
         printf("Error reading file: %d\n", errno);
         exit(EXIT_FAILURE);
       }
@@ -463,7 +521,8 @@ void* get_page(Pager* pager, uint32_t page_num) {
 
     pager->pages[page_num] = page;
 
-    if (page_num >= pager->num_pages) {
+    if (page_num >= pager->num_pages)
+    {
       pager->num_pages = page_num + 1;
     }
   }
@@ -471,15 +530,16 @@ void* get_page(Pager* pager, uint32_t page_num) {
 }
 
 // cursor pointing to the start of the table
-Cursor* table_start(Table* table) {
-  Cursor* cursor = malloc(sizeof(Cursor));
+Cursor *table_start(Table *table)
+{
+  Cursor *cursor = malloc(sizeof(Cursor));
   cursor->table = table;
   // cursor points to the root page at start
   cursor->page_num = table->root_page_num;
   // cursor points to the first cell in the page
   cursor->cell_num = 0;
 
-  void* root_node = get_page(table->pager, table->root_page_num);
+  void *root_node = get_page(table->pager, table->root_page_num);
   uint32_t num_cells = *leaf_node_num_cells(root_node);
   cursor->end_of_table = (num_cells == 0);
 
@@ -487,12 +547,13 @@ Cursor* table_start(Table* table) {
 }
 
 // cursor pointing to the end of the table
-Cursor* table_end(Table* table) {
-  Cursor* cursor = malloc(sizeof(Cursor));
+Cursor *table_end(Table *table)
+{
+  Cursor *cursor = malloc(sizeof(Cursor));
   cursor->table = table;
   cursor->page_num = table->root_page_num;
 
-  void* root_node = get_page(table->pager, table->root_page_num);
+  void *root_node = get_page(table->pager, table->root_page_num);
   uint32_t num_cells = *leaf_node_num_cells(root_node);
   // end of table is the last cell (row)
   cursor->cell_num = num_cells;
@@ -504,20 +565,23 @@ Cursor* table_end(Table* table) {
 
 // figure out where to read/write in memory for a row
 // the cursor contains a pointer to the current row
-void* cursor_value(Cursor* cursor) {
+void *cursor_value(Cursor *cursor)
+{
   uint32_t page_num = cursor->page_num;
 
-  void* page = get_page(cursor->table->pager, page_num);
+  void *page = get_page(cursor->table->pager, page_num);
   return leaf_node_value(page, cursor->cell_num);
 }
 
 // move cursor to the next row
-void cursor_advance(Cursor* cursor) {
+void cursor_advance(Cursor *cursor)
+{
   uint32_t page_num = cursor->page_num;
-  void* node = get_page(cursor->table->pager, page_num);
+  void *node = get_page(cursor->table->pager, page_num);
 
   cursor->cell_num += 1;
-  if (cursor->cell_num >= (*leaf_node_num_cells(node))) {
+  if (cursor->cell_num >= (*leaf_node_num_cells(node)))
+  {
     cursor->end_of_table = true;
   }
 }
@@ -527,20 +591,24 @@ Inserting a row into the database
 
 The row is inserted as a cell into the leaf node
 */
-void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
+void leaf_node_insert(Cursor *cursor, uint32_t key, Row *value)
+{
   // current page
-  void* node = get_page(cursor->table->pager, cursor->page_num);
+  void *node = get_page(cursor->table->pager, cursor->page_num);
 
   uint32_t num_cells = *leaf_node_num_cells(node);
-  if (num_cells >= LEAF_NODE_MAX_CELLS) {
+  if (num_cells >= LEAF_NODE_MAX_CELLS)
+  {
     // Node full
     printf("Need to implement splitting a leaf node.\n");
     exit(EXIT_FAILURE);
   }
 
-  if (cursor->cell_num < num_cells) {
+  if (cursor->cell_num < num_cells)
+  {
     // Make room for new cell
-    for (uint32_t i = num_cells; i > cursor->cell_num; i--) {
+    for (uint32_t i = num_cells; i > cursor->cell_num; i--)
+    {
       // e.g copy content from [2] to [3]
       // if cell num is 1, copy from [1] to [2] then stop (last copy)
       // new content will be written at [1]
@@ -554,15 +622,17 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
   serialize_row(value, leaf_node_value(node, cursor->cell_num));
 }
 
-ExecuteResult execute_insert(Statement* statement, Table* table) {
-  void* node = get_page(table->pager, table->root_page_num);
-  if ((*leaf_node_num_cells(node) >= LEAF_NODE_MAX_CELLS)) {
+ExecuteResult execute_insert(Statement *statement, Table *table)
+{
+  void *node = get_page(table->pager, table->root_page_num);
+  if ((*leaf_node_num_cells(node) >= LEAF_NODE_MAX_CELLS))
+  {
     return EXECUTE_TABLE_FULL;
   }
 
-  Row* row_to_insert = &(statement->row_to_insert);
+  Row *row_to_insert = &(statement->row_to_insert);
   // insert data from the end of the table
-  Cursor* cursor = table_end(table);
+  Cursor *cursor = table_end(table);
 
   // insert the row's id as the key to the cell
   leaf_node_insert(cursor, row_to_insert->id, row_to_insert);
@@ -572,11 +642,13 @@ ExecuteResult execute_insert(Statement* statement, Table* table) {
   return EXIT_SUCCESS;
 }
 
-ExecuteResult execute_select(Statement* statement, Table* table) {
-  Cursor* cursor = table_start(table);
+ExecuteResult execute_select(Statement *statement, Table *table)
+{
+  Cursor *cursor = table_start(table);
 
   Row row;
-  while (!(cursor->end_of_table)) {
+  while (!(cursor->end_of_table))
+  {
     deserialize_row(cursor_value(cursor), &row);
     print_row(&row);
     cursor_advance(cursor);
@@ -587,7 +659,8 @@ ExecuteResult execute_select(Statement* statement, Table* table) {
   return EXECUTE_SUCCESS;
 }
 
-ExecuteResult execute_statement(Statement* statement, Table *table) {
+ExecuteResult execute_statement(Statement *statement, Table *table)
+{
   switch (statement->type)
   {
   case (STATEMENT_INSERT):
@@ -615,13 +688,15 @@ O_CREAT -> Create file if it does not exist.
 S_IWUSR -> User write permission bit macro (owner permission)
 S_IRUSR -> User read permission bit macro (owner permission)
 */
-Pager* pager_open(const char* filename) {
+Pager *pager_open(const char *filename)
+{
   // open a file for reading or writing O_RDWR
   // if it doesn't exist, create it O_CREAT
   // allow reading S_IRUSR and writing S_IWUSR permissions
   int fd = open(filename, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
 
-  if (fd == -1) {
+  if (fd == -1)
+  {
     printf("Unable to open file\n");
     exit(EXIT_FAILURE);
   }
@@ -629,19 +704,21 @@ Pager* pager_open(const char* filename) {
   // Move the read/write file offset to the beginning of the DB file
   off_t file_length = lseek(fd, 0, SEEK_END);
 
-  Pager* pager = malloc(sizeof(Pager));
+  Pager *pager = malloc(sizeof(Pager));
   pager->file_descriptor = fd;
   pager->file_length = file_length; // size of the db file
   pager->num_pages = (file_length / PAGE_SIZE);
 
   // DB file must have an exact number of pages
-  if (file_length % PAGE_SIZE != 0) {
+  if (file_length % PAGE_SIZE != 0)
+  {
     printf("Db file is not a whole number of pages. Corrupt file.\n");
     exit(EXIT_FAILURE);
   }
 
   // initialize pages in the pager
-  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
+  {
     pager->pages[i] = NULL;
   }
 
@@ -659,42 +736,47 @@ The pager is the go between the memory and the table
 
 filename -> The file name for the DB
 */
-Table* db_open(const char* filename) {
-  Pager* pager = pager_open(filename);
+Table *db_open(const char *filename)
+{
+  Pager *pager = pager_open(filename);
 
-  Table* table = malloc(sizeof(Table)); // (size_t)808UL (unsigned long)
+  Table *table = malloc(sizeof(Table)); // (size_t)808UL (unsigned long)
   table->pager = pager;
   // the root page is indexed 0 (first) when the db is first opened
   table->root_page_num = 0;
 
-  if (pager->num_pages == 0) {
+  if (pager->num_pages == 0)
+  {
     // New database file. Initialize page 0 as leaf node
-    void* root_node = get_page(pager, 0);
+    void *root_node = get_page(pager, 0);
     initialize_leaf_node(root_node);
   }
- 
+
   return table;
 }
 
 // main function will have an infinite loop that prints the prompt,
 // gets a line of input, then processes that line of input:
-int main(int argc, char* argv[]) {
-  if (argc < 2) {
+int main(int argc, char *argv[])
+{
+  if (argc < 2)
+  {
     printf("Must supply a database filename.\n");
     exit(EXIT_FAILURE);
   }
 
-  char* filename = argv[1];
-  Table* table = db_open(filename);
+  char *filename = argv[1];
+  Table *table = db_open(filename);
 
-  InputBuffer* input_buffer = new_input_buffer(); // initialize input buffer
+  InputBuffer *input_buffer = new_input_buffer(); // initialize input buffer
   for (;;)
   {
     print_prompt();
     read_input(input_buffer); // input_buffer is passed by reference
 
     // if the input begins with ".", we process it as a meta command (.help, .exit e.t.c)
-    if (input_buffer->buffer[0] == '.') {
+    if (input_buffer->buffer[0] == '.')
+    {
       switch (do_meta_command(input_buffer, table))
       {
       case (META_COMMAND_SUCCESS):
@@ -709,33 +791,35 @@ int main(int argc, char* argv[]) {
 
     // if the input does not begin with ".", we process is as a statement
     Statement statement;
-    switch(prepare_statement(input_buffer, &statement)) {
-      case (PREPARE_SUCCESS):
-        break;
-      case (PREPARE_NEGATIVE_ID):
-        printf("ID must be positive.\n");
-        continue;
-      case (PREPARE_STRING_TOO_LONG):
-        printf("String is too long.\n");
-        continue;
-      case (PREPARE_SYNTAX_ERROR):
-        printf("Syntax error. Could not parse statement.\n");
-        continue;
-      case (PREPARE_UNRECOGNIZED_STATEMENT):
-        printf("Unrecognized keyword at start of '%s'.\n", input_buffer->buffer);
-        // request input again
-        continue;
+    switch (prepare_statement(input_buffer, &statement))
+    {
+    case (PREPARE_SUCCESS):
+      break;
+    case (PREPARE_NEGATIVE_ID):
+      printf("ID must be positive.\n");
+      continue;
+    case (PREPARE_STRING_TOO_LONG):
+      printf("String is too long.\n");
+      continue;
+    case (PREPARE_SYNTAX_ERROR):
+      printf("Syntax error. Could not parse statement.\n");
+      continue;
+    case (PREPARE_UNRECOGNIZED_STATEMENT):
+      printf("Unrecognized keyword at start of '%s'.\n", input_buffer->buffer);
+      // request input again
+      continue;
     }
 
-    switch (execute_statement(&statement, table)) {
-      case (EXECUTE_SUCCESS):
-        printf("Executed.\n");
-        break;
-      case (EXECUTE_TABLE_FULL):
-        printf("Error: Table full.\n");
-        break;
-      default:
-        break;
+    switch (execute_statement(&statement, table))
+    {
+    case (EXECUTE_SUCCESS):
+      printf("Executed.\n");
+      break;
+    case (EXECUTE_TABLE_FULL):
+      printf("Error: Table full.\n");
+      break;
+    default:
+      break;
     }
   }
 }
