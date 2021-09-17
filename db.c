@@ -163,38 +163,6 @@ typedef struct {
   bool end_of_table; // Indicates a position one post the last element
 } Cursor;
 
-// cursor pointing to the start of the table
-Cursor* table_start(Table* table) {
-  Cursor* cursor = malloc(sizeof(Cursor));
-  cursor->table = table;
-  // cursor points to the root page at start
-  cursor->page_num = table->root_page_num;
-  // cursor points to the first cell in the page
-  cursor->cell_num = 0;
-
-  void* root_node = get_page(table->pager, table->root_page_num);
-  uint32_t num_cells = *leaf_node_num_cells(root_node);
-  cursor->end_of_table = (num_cells == 0);
-
-  return cursor;
-}
-
-// cursor pointing to the end of the table
-Cursor* table_end(Table* table) {
-  Cursor* cursor = malloc(sizeof(Cursor));
-  cursor->table = table;
-  cursor->page_num = table->root_page_num;
-
-  void* root_node = get_page(table->pager, table->root_page_num);
-  uint32_t num_cells = *leaf_node_num_cells(root_node);
-  // end of table is the last cell (row)
-  cursor->cell_num = num_cells;
-
-  cursor->end_of_table = true;
-
-  return cursor;
-}
-
 // 'constructor' for InputBuffer
 // struct properties are accessed via ->
 InputBuffer* new_input_buffer() {
@@ -502,6 +470,38 @@ void* get_page(Pager* pager, uint32_t page_num) {
   return pager->pages[page_num];
 }
 
+// cursor pointing to the start of the table
+Cursor* table_start(Table* table) {
+  Cursor* cursor = malloc(sizeof(Cursor));
+  cursor->table = table;
+  // cursor points to the root page at start
+  cursor->page_num = table->root_page_num;
+  // cursor points to the first cell in the page
+  cursor->cell_num = 0;
+
+  void* root_node = get_page(table->pager, table->root_page_num);
+  uint32_t num_cells = *leaf_node_num_cells(root_node);
+  cursor->end_of_table = (num_cells == 0);
+
+  return cursor;
+}
+
+// cursor pointing to the end of the table
+Cursor* table_end(Table* table) {
+  Cursor* cursor = malloc(sizeof(Cursor));
+  cursor->table = table;
+  cursor->page_num = table->root_page_num;
+
+  void* root_node = get_page(table->pager, table->root_page_num);
+  uint32_t num_cells = *leaf_node_num_cells(root_node);
+  // end of table is the last cell (row)
+  cursor->cell_num = num_cells;
+
+  cursor->end_of_table = true;
+
+  return cursor;
+}
+
 // figure out where to read/write in memory for a row
 // the cursor contains a pointer to the current row
 void* cursor_value(Cursor* cursor) {
@@ -520,6 +520,38 @@ void cursor_advance(Cursor* cursor) {
   if (cursor->cell_num >= (*leaf_node_num_cells(node))) {
     cursor->end_of_table = true;
   }
+}
+
+/*
+Inserting a row into the database
+
+The row is inserted as a cell into the leaf node
+*/
+void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
+  // current page
+  void* node = get_page(cursor->table->pager, cursor->page_num);
+
+  uint32_t num_cells = *leaf_node_num_cells(node);
+  if (num_cells >= LEAF_NODE_MAX_CELLS) {
+    // Node full
+    printf("Need to implement splitting a leaf node.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if (cursor->cell_num < num_cells) {
+    // Make room for new cell
+    for (uint32_t i = num_cells; i > cursor->cell_num; i--) {
+      // e.g copy content from [2] to [3]
+      // if cell num is 1, copy from [1] to [2] then stop (last copy)
+      // new content will be written at [1]
+      memcpy(leaf_node_cell(node, i), leaf_node_cell(node, i - 1), LEAF_NODE_CELL_SIZE);
+    }
+  }
+
+  // increase the number of cells in the page (node)
+  *(leaf_node_num_cells(node)) += 1;
+  *(leaf_node_key(node, cursor->cell_num)) = key;
+  serialize_row(value, leaf_node_value(node, cursor->cell_num));
 }
 
 ExecuteResult execute_insert(Statement* statement, Table* table) {
@@ -642,38 +674,6 @@ Table* db_open(const char* filename) {
   }
  
   return table;
-}
-
-/*
-Inserting a row into the database
-
-The row is inserted as a cell into the leaf node
-*/
-void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
-  // current page
-  void* node = get_page(cursor->table->pager, cursor->page_num);
-
-  uint32_t num_cells = *leaf_node_num_cells(node);
-  if (num_cells >= LEAF_NODE_MAX_CELLS) {
-    // Node full
-    printf("Need to implement splitting a leaf node.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  if (cursor->cell_num < num_cells) {
-    // Make room for new cell
-    for (uint32_t i = num_cells; i > cursor->cell_num; i--) {
-      // e.g copy content from [2] to [3]
-      // if cell num is 1, copy from [1] to [2] then stop (last copy)
-      // new content will be written at [1]
-      memcpy(leaf_node_cell(node, i), leaf_node_cell(node, i - 1), LEAF_NODE_CELL_SIZE);
-    }
-  }
-
-  // increase the number of cells in the page (node)
-  *(leaf_node_num_cells(node)) += 1;
-  *(leaf_node_key(node, cursor->cell_num)) = key;
-  serialize_row(value, leaf_node_value(node, cursor->cell_num));
 }
 
 // main function will have an infinite loop that prints the prompt,
