@@ -45,3 +45,24 @@ db > "
 set constantsResult [exec $dbliteFileName $dbFile << ".constants\n.exit\n"]
 
 puts [testOutput $constantsDesc $constantsExpected $constantsResult]
+
+# Tree view
+
+# Remove the test database
+file delete $dbFileDirectory
+
+set treeViewDesc "displays a tree view of the rows"
+set treeViewExpected "db > Executed.
+db > Executed.
+db > Executed.
+db > Tree:
+leaf (size 3)
+  - 0 : 3
+  - 1 : 1
+  - 2 : 2
+db > "
+set treeViewResult [
+  exec $dbliteFileName $dbFile << "insert 3 foo a@b.c\ninsert 1 baa d@e.f\ninsert 2 buz g@h.i\n.btree\n.exit\n"
+]
+
+puts [testOutput $treeViewDesc $treeViewExpected $treeViewResult]
