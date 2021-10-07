@@ -22,15 +22,20 @@
 // required for `bool`
 #include <stdbool.h>
 
-// InputBuffer represents the an input object for the DBLite repl
-// InputBuffer is defined as a struct type
-// char* is used for the buffer because it represents a string of input
-typedef struct
+/* Forward declarations of structures */
+typedef struct InputBuffer InputBuffer;
+
+/*
+InputBuffer represents the an input object for the DBLite repl
+InputBuffer is defined as a struct type
+char* is used for the buffer because it represents a string of input
+*/
+struct InputBuffer
 {
   char *buffer; // the input buffer (input from an IO device, in this case, the shell)
-  size_t buffer_length;
-  ssize_t input_length;
-} InputBuffer;
+  size_t buffer_length; // size_t is an unsigned long (at least 32 bits)
+  ssize_t input_length; // ssize_t is a long
+};
 
 // MetaCommandResult defines all possible results of running a meta command
 // If a meta command is recognized, use meta_command_success
@@ -69,13 +74,13 @@ typedef enum
   EXECUTE_DUPLICATE_KEY,
 } ExecuteResult;
 
+#define COLUMN_USERNAME_SIZE 32
+#define COLUMN_EMAIL_SIZE 255
+
 // Row defines the arguments for an insert operation
 // username is an array of characters that has COLUMN_USERNAME_SIZE allocated
 // in this case, we allocate only 32 characters
 // email is an array of characters; a string
-#define COLUMN_USERNAME_SIZE 32
-#define COLUMN_EMAIL_SIZE 255
-
 typedef struct
 {
   uint32_t id;
@@ -540,10 +545,13 @@ Cursor *table_find(Table *table, uint32_t key)
   void *root_node = get_page(table->pager, root_page_num);
 
   // get_node_type is not implemented
-  if (get_node_type(root_node) == NODE_LEAF) {
+  if (get_node_type(root_node) == NODE_LEAF)
+  {
     // leaf_node_find is not implemented
     return leaf_node_find(table, root_page_num, key);
-  } else {
+  }
+  else
+  {
     printf("Need to implement searching an internal node\n");
     exit(EXIT_FAILURE);
   }
@@ -624,10 +632,12 @@ ExecuteResult execute_insert(Statement *statement, Table *table)
 
   // if the current cell, pointed by the cursor, is not
   // at the end of the table
-  if (cursor->cell_num < num_cells) {
+  if (cursor->cell_num < num_cells)
+  {
     // get the key of the current cell
     uint32_t key_at_index = *leaf_node_key(node, cursor->cell_num);
-    if (key_at_index == key_to_insert) {
+    if (key_at_index == key_to_insert)
+    {
       return EXECUTE_DUPLICATE_KEY;
     }
   }
