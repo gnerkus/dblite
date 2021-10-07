@@ -32,7 +32,7 @@ char* is used for the buffer because it represents a string of input
 */
 struct InputBuffer
 {
-  char *buffer; // the input buffer (input from an IO device, in this case, the shell)
+  char *buffer;         // the input buffer (input from an IO device, in this case, the shell)
   size_t buffer_length; // size_t is an unsigned long (at least 32 bits)
   ssize_t input_length; // ssize_t is a long
 };
@@ -538,7 +538,13 @@ Cursor *table_start(Table *table)
   return cursor;
 }
 
-// cursor pointing to a position in the table
+/**
+ * Returns a cursor pointing to a position in the table
+ *
+ * table - The table
+ * key - The identifying key for the data object (row); key
+ *       could be an id.
+*/
 Cursor *table_find(Table *table, uint32_t key)
 {
   uint32_t root_page_num = table->root_page_num;
@@ -555,6 +561,43 @@ Cursor *table_find(Table *table, uint32_t key)
     printf("Need to implement searching an internal node\n");
     exit(EXIT_FAILURE);
   }
+}
+
+/**
+ * Returns a cursor pointing to a page and row on the table
+ * 
+ * table - The table
+ * key - The identifying key for the data object (row)
+ * page_num - The page where the data is to be found
+ * 
+*/
+Cursor *leaf_node_find(Table *table, uint32_t page_num, uint32_t key) {
+  void *node = get_page(table->pager, page_num);
+  uint32_t num_cells = *leaf_node_num_cells(node);
+
+  Cursor* cursor = malloc(sizeof(Cursor));
+  cursor->table = table;
+  cursor->page_num = page_num;
+
+  // Binary search for the page that contains the key
+  uint32_t min_index = 0;
+  uint32_t one_past_max_index = num_cells;
+  while (one_past_max_index != min_index) {
+    uint32_t index = (min_index + one_past_max_index) / 2;
+    uint32_t key_at_index = *leaf_node_key(node, index);
+    if (key == key_at_index) {
+      cursor->cell_num = index;
+      return cursor;
+    }
+    if (key < key_at_index) {
+      one_past_max_index = index;
+    } else {
+      min_index = index + 1;
+    }
+  }
+
+  cursor->cell_num = min_index;
+  return cursor;
 }
 
 // figure out where to read/write in memory for a row
