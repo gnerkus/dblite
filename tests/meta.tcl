@@ -57,9 +57,9 @@ db > Executed.
 db > Executed.
 db > Tree:
 leaf (size 3)
-  - 0 : 3
-  - 1 : 1
-  - 2 : 2
+  - 0 : 1
+  - 1 : 2
+  - 2 : 3
 db > "
 set treeViewResult [
   exec $dbliteFileName $dbFile << "insert 3 foo a@b.c\ninsert 1 baa d@e.f\ninsert 2 buz g@h.i\n.btree\n.exit\n"

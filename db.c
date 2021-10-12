@@ -273,6 +273,7 @@ void *leaf_node_value(void *node, uint32_t cell_num)
 
 void initialize_leaf_node(void *node)
 {
+  set_node_type(node, NODE_LEAF);
   *leaf_node_num_cells(node) = 0;
 }
 
@@ -538,6 +539,80 @@ Cursor *table_start(Table *table)
   return cursor;
 }
 
+NodeType get_node_type(void *node)
+{
+  uint8_t value = *((uint8_t *)(node + NODE_TYPE_OFFSET));
+  return (NodeType)value;
+}
+
+void set_node_type(void *node, NodeType type)
+{
+  uint8_t value = type;
+  /**
+   * store the sum of the node and NODE_TYPE_OFFSET in a uint8_t
+   * if the value is greater than a uint8_t, it will be truncated to a uint8_t
+   * 
+   * Since the node type is constrained to a uint8_t size, then the result
+   * of this truncation will be the node type
+  */
+  *((uint8_t *)(node + NODE_TYPE_OFFSET)) = value;
+}
+
+/**
+ * Returns a cursor pointing to a page and row on the table.
+ * It will return one of three results:
+ * 
+  - the position of the key,
+  - the position of another key that we’ll need to move if we want to insert the new key, or
+  - the position one past the last key
+
+ * 
+ * table - The table
+ * key - The identifying key for the data object (row)
+ * page_num - The page where the data is to be found
+ * 
+*/
+Cursor *leaf_node_find(Table *table, uint32_t page_num, uint32_t key)
+{
+  void *node = get_page(table->pager, page_num);
+  // number of cells in the node (page)
+  uint32_t num_cells = *leaf_node_num_cells(node);
+
+  Cursor *cursor = malloc(sizeof(Cursor));
+  cursor->table = table;
+  cursor->page_num = page_num;
+
+  // Binary search for the cell (row) that contains the key
+  uint32_t min_index = 0;
+  uint32_t one_past_max_index = num_cells;
+  while (one_past_max_index != min_index)
+  {
+    uint32_t mid_index = (min_index + one_past_max_index) / 2;
+    uint32_t key_at_index = *leaf_node_key(node, mid_index);
+    // when key is found
+    if (key == key_at_index)
+    {
+      cursor->cell_num = mid_index;
+      return cursor;
+    }
+    // if key cannot be found in right sub-array
+    if (key < key_at_index)
+    {
+      one_past_max_index = mid_index;
+    }
+    else
+    {
+      // if this is always called until the loop stops, then
+      // the cell_num will be one_past_max_index
+      min_index = mid_index + 1;
+    }
+  }
+
+  // min_index is the index of the cell that we'll need to move
+  cursor->cell_num = min_index;
+  return cursor;
+}
+
 /**
  * Returns a cursor pointing to a position in the table
  *
@@ -553,7 +628,6 @@ Cursor *table_find(Table *table, uint32_t key)
   // get_node_type is not implemented
   if (get_node_type(root_node) == NODE_LEAF)
   {
-    // leaf_node_find is not implemented
     return leaf_node_find(table, root_page_num, key);
   }
   else
@@ -561,43 +635,6 @@ Cursor *table_find(Table *table, uint32_t key)
     printf("Need to implement searching an internal node\n");
     exit(EXIT_FAILURE);
   }
-}
-
-/**
- * Returns a cursor pointing to a page and row on the table
- * 
- * table - The table
- * key - The identifying key for the data object (row)
- * page_num - The page where the data is to be found
- * 
-*/
-Cursor *leaf_node_find(Table *table, uint32_t page_num, uint32_t key) {
-  void *node = get_page(table->pager, page_num);
-  uint32_t num_cells = *leaf_node_num_cells(node);
-
-  Cursor* cursor = malloc(sizeof(Cursor));
-  cursor->table = table;
-  cursor->page_num = page_num;
-
-  // Binary search for the page that contains the key
-  uint32_t min_index = 0;
-  uint32_t one_past_max_index = num_cells;
-  while (one_past_max_index != min_index) {
-    uint32_t index = (min_index + one_past_max_index) / 2;
-    uint32_t key_at_index = *leaf_node_key(node, index);
-    if (key == key_at_index) {
-      cursor->cell_num = index;
-      return cursor;
-    }
-    if (key < key_at_index) {
-      one_past_max_index = index;
-    } else {
-      min_index = index + 1;
-    }
-  }
-
-  cursor->cell_num = min_index;
-  return cursor;
 }
 
 // figure out where to read/write in memory for a row
@@ -900,6 +937,8 @@ int main(int argc, char *argv[])
     case (EXECUTE_TABLE_FULL):
       printf("Error: Table full.\n");
       break;
+    case (EXECUTE_DUPLICATE_KEY):
+      printf("Error: Duplicate key.\n");
     default:
       break;
     }
