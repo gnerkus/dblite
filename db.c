@@ -22,15 +22,20 @@
 // required for `bool`
 #include <stdbool.h>
 
-// InputBuffer represents the an input object for the DBLite repl
-// InputBuffer is defined as a struct type
-// char* is used for the buffer because it represents a string of input
-typedef struct
+/* Forward declarations of structures */
+typedef struct InputBuffer InputBuffer;
+
+/*
+InputBuffer represents the an input object for the DBLite repl
+InputBuffer is defined as a struct type
+char* is used for the buffer because it represents a string of input
+*/
+struct InputBuffer
 {
-  char *buffer; // the input buffer (input from an IO device, in this case, the shell)
-  size_t buffer_length;
-  ssize_t input_length;
-} InputBuffer;
+  char *buffer;         // the input buffer (input from an IO device, in this case, the shell)
+  size_t buffer_length; // size_t is an unsigned long (at least 32 bits)
+  ssize_t input_length; // ssize_t is a long
+};
 
 // MetaCommandResult defines all possible results of running a meta command
 // If a meta command is recognized, use meta_command_success
@@ -66,15 +71,16 @@ typedef enum
 {
   EXECUTE_SUCCESS,
   EXECUTE_TABLE_FULL,
+  EXECUTE_DUPLICATE_KEY,
 } ExecuteResult;
+
+#define COLUMN_USERNAME_SIZE 32
+#define COLUMN_EMAIL_SIZE 255
 
 // Row defines the arguments for an insert operation
 // username is an array of characters that has COLUMN_USERNAME_SIZE allocated
 // in this case, we allocate only 32 characters
 // email is an array of characters; a string
-#define COLUMN_USERNAME_SIZE 32
-#define COLUMN_EMAIL_SIZE 255
-
 typedef struct
 {
   uint32_t id;
@@ -265,8 +271,22 @@ void *leaf_node_value(void *node, uint32_t cell_num)
   return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE;
 }
 
+void set_node_type(void *node, NodeType type)
+{
+  uint8_t value = type;
+  /**
+   * store the sum of the node and NODE_TYPE_OFFSET in a uint8_t
+   * if the value is greater than a uint8_t, it will be truncated to a uint8_t
+   * 
+   * Since the node type is constrained to a uint8_t size, then the result
+   * of this truncation will be the node type
+  */
+  *((uint8_t *)(node + NODE_TYPE_OFFSET)) = value;
+}
+
 void initialize_leaf_node(void *node)
 {
+  set_node_type(node, NODE_LEAF);
   *leaf_node_num_cells(node) = 0;
 }
 
@@ -532,21 +552,89 @@ Cursor *table_start(Table *table)
   return cursor;
 }
 
-// cursor pointing to the end of the table
-Cursor *table_end(Table *table)
+NodeType get_node_type(void *node)
 {
+  uint8_t value = *((uint8_t *)(node + NODE_TYPE_OFFSET));
+  return (NodeType)value;
+}
+
+/**
+ * Returns a cursor pointing to a page and row on the table.
+ * It will return one of three results:
+ * 
+  - the position of the key,
+  - the position of another key that we’ll need to move if we want to insert the new key, or
+  - the position one past the last key
+
+ * 
+ * table - The table
+ * key - The identifying key for the data object (row)
+ * page_num - The page where the data is to be found
+ * 
+*/
+Cursor *leaf_node_find(Table *table, uint32_t page_num, uint32_t key)
+{
+  void *node = get_page(table->pager, page_num);
+  // number of cells in the node (page)
+  uint32_t num_cells = *leaf_node_num_cells(node);
+
   Cursor *cursor = malloc(sizeof(Cursor));
   cursor->table = table;
-  cursor->page_num = table->root_page_num;
+  cursor->page_num = page_num;
 
-  void *root_node = get_page(table->pager, table->root_page_num);
-  uint32_t num_cells = *leaf_node_num_cells(root_node);
-  // end of table is the last cell (row)
-  cursor->cell_num = num_cells;
+  // Binary search for the cell (row) that contains the key
+  uint32_t min_index = 0;
+  uint32_t one_past_max_index = num_cells;
+  while (one_past_max_index != min_index)
+  {
+    uint32_t mid_index = (min_index + one_past_max_index) / 2;
+    uint32_t key_at_index = *leaf_node_key(node, mid_index);
+    // when key is found
+    if (key == key_at_index)
+    {
+      cursor->cell_num = mid_index;
+      return cursor;
+    }
+    // if key cannot be found in right sub-array
+    if (key < key_at_index)
+    {
+      one_past_max_index = mid_index;
+    }
+    else
+    {
+      // if this is always called until the loop stops, then
+      // the cell_num will be one_past_max_index
+      min_index = mid_index + 1;
+    }
+  }
 
-  cursor->end_of_table = true;
-
+  // min_index is the index of the cell that we'll need to move
+  cursor->cell_num = min_index;
   return cursor;
+}
+
+/**
+ * Returns a cursor pointing to a position in the table
+ *
+ * table - The table
+ * key - The identifying key for the data object (row); key
+ *       could be an id.
+*/
+Cursor *table_find(Table *table, uint32_t key)
+{
+  uint32_t root_page_num = table->root_page_num;
+  void *root_node = get_page(table->pager, root_page_num);
+
+  // get_node_type is not implemented
+  if (get_node_type(root_node) == NODE_LEAF)
+  {
+    return leaf_node_find(table, root_page_num, key);
+  }
+  else
+  {
+    printf("Need to implement searching an internal node\n");
+    exit(EXIT_FAILURE);
+  }
 }
 
 // figure out where to read/write in memory for a row
@@ -611,14 +699,28 @@ void leaf_node_insert(Cursor *cursor, uint32_t key, Row *value)
 ExecuteResult execute_insert(Statement *statement, Table *table)
 {
   void *node = get_page(table->pager, table->root_page_num);
-  if ((*leaf_node_num_cells(node) >= LEAF_NODE_MAX_CELLS))
+  uint32_t num_cells = (*leaf_node_num_cells(node));
+  if (num_cells >= LEAF_NODE_MAX_CELLS)
   {
     return EXECUTE_TABLE_FULL;
   }
 
   Row *row_to_insert = &(statement->row_to_insert);
-  // insert data from the end of the table
-  Cursor *cursor = table_end(table);
+  uint32_t key_to_insert = row_to_insert->id;
+  // insert data into a place in the table
+  Cursor *cursor = table_find(table, key_to_insert);
+
+  // if the current cell, pointed by the cursor, is not
+  // at the end of the table
+  if (cursor->cell_num < num_cells)
+  {
+    // get the key of the current cell
+    uint32_t key_at_index = *leaf_node_key(node, cursor->cell_num);
+    if (key_at_index == key_to_insert)
+    {
+      return EXECUTE_DUPLICATE_KEY;
+    }
+  }
 
   // insert the row's id as the key to the cell
   leaf_node_insert(cursor, row_to_insert->id, row_to_insert);
@@ -835,6 +937,8 @@ int main(int argc, char *argv[])
     case (EXECUTE_TABLE_FULL):
       printf("Error: Table full.\n");
       break;
+    case (EXECUTE_DUPLICATE_KEY):
+      printf("Error: Duplicate key.\n");
     default:
       break;
     }
