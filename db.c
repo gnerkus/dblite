@@ -271,6 +271,19 @@ void *leaf_node_value(void *node, uint32_t cell_num)
   return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE;
 }
 
+void set_node_type(void *node, NodeType type)
+{
+  uint8_t value = type;
+  /**
+   * store the sum of the node and NODE_TYPE_OFFSET in a uint8_t
+   * if the value is greater than a uint8_t, it will be truncated to a uint8_t
+   * 
+   * Since the node type is constrained to a uint8_t size, then the result
+   * of this truncation will be the node type
+  */
+  *((uint8_t *)(node + NODE_TYPE_OFFSET)) = value;
+}
+
 void initialize_leaf_node(void *node)
 {
   set_node_type(node, NODE_LEAF);
@@ -543,19 +556,6 @@ NodeType get_node_type(void *node)
 {
   uint8_t value = *((uint8_t *)(node + NODE_TYPE_OFFSET));
   return (NodeType)value;
-}
-
-void set_node_type(void *node, NodeType type)
-{
-  uint8_t value = type;
-  /**
-   * store the sum of the node and NODE_TYPE_OFFSET in a uint8_t
-   * if the value is greater than a uint8_t, it will be truncated to a uint8_t
-   * 
-   * Since the node type is constrained to a uint8_t size, then the result
-   * of this truncation will be the node type
-  */
-  *((uint8_t *)(node + NODE_TYPE_OFFSET)) = value;
 }
 
 /**

@@ -53,13 +53,12 @@ puts [testOutput $singleInsertDesc $singleInsertExpected $singleInsertResult]
 file delete $dbFileDirectory
 
 set baseCommand ""
-set insertCommand "insert 1 foo a@b.c\n"
 
 set bulkInsertDesc "prints error message when table is full"
 set bulkInsertExpected "db > Error: Table full."
 
 for { set a 0} {$a < 1401} {incr a} {
-  append baseCommand $insertCommand
+  append baseCommand "insert $a foo a@b.c\n"
 }
 
 append baseCommand ".exit\n"
@@ -118,7 +117,7 @@ set longStringInsertErrorResult [exec $dbliteFileName $dbFile << "insert 1 $long
 
 puts [testOutput $longStringInsertErrorDesc $longStringInsertErrorExpected $longStringInsertErrorResult]
 
-# Print error is id is negative
+# Print error if id is negative
 
 # Remove the test database
 file delete $dbFileDirectory
@@ -133,3 +132,19 @@ db > "
 set negativeIdInsertResult [exec $dbliteFileName $dbFile << "insert $negativeInsertId foo foo@bar.com\nselect\n.exit\n"]
 
 puts [testOutput $negativeInsertDesc $negativeInsertExpected $negativeIdInsertResult]
+
+# Print error if duplicate index
+
+# Remove the test database
+file delete $dbFileDirectory
+
+set duplicateIdInsertDesc "prints an error message if there is a duplicate id"
+set duplicateIdInsertExpected "db > Executed.
+db > Error: Duplicate key.
+db > (1, foo, a@b.c)
+Executed.
+db > "
+
+set duplicateIdInsertResult [exec $dbliteFileName $dbFile << "insert 1 foo a@b.c\ninsert 1 bar d@e.f\nselect\n.exit\n"]
+
+puts [testOutput $duplicateIdInsertDesc $duplicateIdInsertExpected $duplicateIdInsertResult]
