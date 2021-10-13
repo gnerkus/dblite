@@ -246,6 +246,9 @@ const uint32_t LEAF_NODE_CELL_SIZE = LEAF_NODE_KEY_SIZE + LEAF_NODE_VALUE_SIZE;
 const uint32_t LEAF_NODE_SPACE_FOR_CELLS = PAGE_SIZE - LEAF_NODE_HEADER_SIZE;
 const uint32_t LEAF_NODE_MAX_CELLS = LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE;
 
+const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
+const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
+
 // returns a pointer to the start of the leaf node's cells
 uint32_t *leaf_node_num_cells(void *node)
 {
@@ -660,6 +663,64 @@ void cursor_advance(Cursor *cursor)
   }
 }
 
+/**
+ * Pages are not recycled so new pages are at the end of the table
+ * 
+*/
+uint32_t get_unused_page_num(Pager *pager)
+{
+  return pager->num_pages;
+}
+
+void leaf_node_split_and_insert(Cursor *cursor, uint32_t key, Row *value)
+{
+  // old_node is the page that's full; new_node is the page we want to split with
+  void *old_node = get_page(cursor->table->pager, cursor->page_num);
+  uint32_t new_page_num = get_unused_page_num(cursor->table->pager);
+  void *new_node = get_page(cursor->table->pager, new_page_num);
+  initialize_leaf_node(new_node);
+
+  /*
+    All existing keys plus new key should be divided
+    evenly between old (left) and new (right) nodes.
+    Starting from the right, move each key to correct position.
+  */
+  for (uint32_t i = LEAF_NODE_MAX_CELLS; i >= 0; i--)
+  {
+    void *destination_node;
+    if (i >= LEAF_NODE_LEFT_SPLIT_COUNT)
+    {
+      destination_node = new_node;
+    }
+    else
+    {
+      destination_node = old_node;
+    }
+    // index_within_node determines where to write the cell within either old or new
+    // the values fall between 0 and LEAF_NODE_LEFT_SPLIT_COUNT
+    // For example, for LEAF_NODE_MAX_CELLS of 21, index_within_node = 0 - 11
+    // So if i is 12, it will be written to index 1 of new_node
+    // if i is 1, it will be written to index 1 of old_node
+    uint32_t index_within_node = i % LEAF_NODE_LEFT_SPLIT_COUNT;
+    void *destination = leaf_node_cell(destination_node, index_within_node);
+
+    if (i == cursor->cell_num)
+    {
+      serialize_row(value, destination);
+    }
+    else if (i > cursor->cell_num)
+    {
+      memcpy(destination, leaf_node_cell(old_node, i - 1), LEAF_NODE_CELL_SIZE);
+    }
+    else
+    {
+      // if i is the key for a cell that was written before the last, copy to its
+      // new destination
+      memcpy(destination, leaf_node_cell(old_node, i), LEAF_NODE_CELL_SIZE);
+    }
+  }
+}
+
 /*
 Inserting a row into the database
 
@@ -673,9 +734,9 @@ void leaf_node_insert(Cursor *cursor, uint32_t key, Row *value)
   uint32_t num_cells = *leaf_node_num_cells(node);
   if (num_cells >= LEAF_NODE_MAX_CELLS)
   {
-    // Node full
-    printf("Need to implement splitting a leaf node.\n");
-    exit(EXIT_FAILURE);
+    // Node full so we split
+    leaf_node_split_and_insert(cursor, key, value);
+    return;
   }
 
   if (cursor->cell_num < num_cells)
@@ -700,10 +761,6 @@ ExecuteResult execute_insert(Statement *statement, Table *table)
 {
   void *node = get_page(table->pager, table->root_page_num);
   uint32_t num_cells = (*leaf_node_num_cells(node));
-  if (num_cells >= LEAF_NODE_MAX_CELLS)
-  {
-    return EXECUTE_TABLE_FULL;
-  }
 
   Row *row_to_insert = &(statement->row_to_insert);
   uint32_t key_to_insert = row_to_insert->id;
