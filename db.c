@@ -280,10 +280,10 @@ void set_node_type(void *node, NodeType type)
   /**
    * store the sum of the node and NODE_TYPE_OFFSET in a uint8_t
    * if the value is greater than a uint8_t, it will be truncated to a uint8_t
-   * 
+   *
    * Since the node type is constrained to a uint8_t size, then the result
    * of this truncation will be the node type
-  */
+   */
   *((uint8_t *)(node + NODE_TYPE_OFFSET)) = value;
 }
 
@@ -315,8 +315,8 @@ void read_input(InputBuffer *input_buffer)
 
   /*
   &(input_buffer->buffer)
-  
-  a pointer to the variable we use to point to the buffer containing the read line. 
+
+  a pointer to the variable we use to point to the buffer containing the read line.
   If it set to NULL it is mallocatted by getline and should thus be freed by the user, even if the command fails.
 
   Use & to retrieve the address of a variable. the address of a variable is a pointer
@@ -564,16 +564,16 @@ NodeType get_node_type(void *node)
 /**
  * Returns a cursor pointing to a page and row on the table.
  * It will return one of three results:
- * 
+ *
   - the position of the key,
   - the position of another key that we’ll need to move if we want to insert the new key, or
   - the position one past the last key
 
- * 
+ *
  * table - The table
  * key - The identifying key for the data object (row)
  * page_num - The page where the data is to be found
- * 
+ *
 */
 Cursor *leaf_node_find(Table *table, uint32_t page_num, uint32_t key)
 {
@@ -622,7 +622,7 @@ Cursor *leaf_node_find(Table *table, uint32_t page_num, uint32_t key)
  * table - The table
  * key - The identifying key for the data object (row); key
  *       could be an id.
-*/
+ */
 Cursor *table_find(Table *table, uint32_t key)
 {
   uint32_t root_page_num = table->root_page_num;
@@ -665,13 +665,51 @@ void cursor_advance(Cursor *cursor)
 
 /**
  * Pages are not recycled so new pages are at the end of the table
- * 
-*/
+ *
+ */
 uint32_t get_unused_page_num(Pager *pager)
 {
   return pager->num_pages;
 }
 
+void create_new_root(Table *table, uint32_t right_child_page_num)
+{
+  /*
+    Handle splitting the root.
+
+    1. Old root copied to new page, becomes left child.
+    2. Address of right child passed in.
+    3. Re-initialize root page to contain the new root node.
+    4. New root node points to two children.
+  */
+
+  void* root = get_page(table->pager, table->root_page_num);
+  void* right_child = get_page(table->pager, right_child_page_num);
+
+  // get an unallocated page to be used as the left child
+  uint32_t left_child_page_num = get_unused_page_num(table->pager);
+  void* left_child = get_page(table->pager, left_child_page_num);
+
+  /* Left child has data copied from old root */
+  memcpy(left_child, root, PAGE_SIZE);
+  // left child is no longer the root
+  set_node_root(left_child, false);
+}
+
+/**
+ * To split the content of the original page between two pages:
+ * 
+ * 1. Create / fetch the new page
+ * 2. Find the middle number
+ * 3. For each cell in the old page, choose whether to move it to the 
+ * new_page or keep in the old page, based on its index (key)
+ * if the index is more than a middle number, move to new, if lower, leave in old
+ * 4. Get the destination cell for each index from 3 above
+ * 5. Write the cells to memory:
+ * 5.1. if the index is for the cell to be written, write the data to memory
+ * 5.2. if the index is for any of the existing cells (from old_node), copy
+ * over to the new destination (new_node / old_node)
+*/
 void leaf_node_split_and_insert(Cursor *cursor, uint32_t key, Row *value)
 {
   // old_node is the page that's full; new_node is the page we want to split with
@@ -718,6 +756,17 @@ void leaf_node_split_and_insert(Cursor *cursor, uint32_t key, Row *value)
       // new destination
       memcpy(destination, leaf_node_cell(old_node, i), LEAF_NODE_CELL_SIZE);
     }
+  }
+
+  if (is_node_root(old_node))
+  {
+    // if the old_node was a root then we need to create a new root after the split
+    // both the old_node and new_node will then be connected to this new root
+    return create_new_root(cursor->table, new_page_num);
+  } else
+  {
+    printf("Need to implement updating parent after split\n");
+    exit(EXIT_FAILURE);
   }
 }
 
