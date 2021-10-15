@@ -249,6 +249,42 @@ const uint32_t LEAF_NODE_MAX_CELLS = LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_
 const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
 const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
 
+/*
+* Internal Node Header Layout
+*
+* 1. byte 0: node_type
+* 2. byte 1: is_root
+* 3. byte 2 - 5: parent pointer
+* 4. byte 6 - 9: num keys
+* 5. byte 10 - 13: right child pointer
+* 6. byte 14 - 17: child pointer 0
+* 7. byte 15 - 21: key 0
+* ...
+* byte 4086 - 4089: child pointer 509
+* byte 4090 - 4093: key 509
+*/
+// the keys in an internal node are references to pages (leaf nodes)
+const uint32_t INTERNAL_NODE_NUM_KEYS_SIZE = sizeof(uint32_t);
+const uint32_t INTERNAL_NODE_NUM_KEYS_OFFSET = COMMON_NODE_HEADER_SIZE;
+// Reference to the page number of the rightmost child of the internal node
+const uint32_t INTERNAL_NODE_RIGHT_CHILD_SIZE = sizeof(uint32_t);
+const uint32_t INTERNAL_NODE_RIGHT_CHILD_OFFSET =
+  INTERNAL_NODE_NUM_KEYS_OFFSET + INTERNAL_NODE_NUM_KEYS_SIZE;
+const uint32_t INTERNAL_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE +
+  INTERNAL_NODE_NUM_KEYS_SIZE +
+  INTERNAL_NODE_RIGHT_CHILD_SIZE;
+
+/*
+* Internal Node Body Layout
+
+* The body is an array of cells where each cell contains a child pointer and a key.
+* Every key should be the maximum key contained in the child to its left.
+*/
+const uint32_t INTERNAL_NODE_CELL_KEY_SIZE = sizeof(uint32_t);
+const uint32_t INTERNAL_NODE_CELL_SIZE = sizeof(uint32_t);
+const uint32_t INTERNAL_NODE_CELL_SIZE =
+  INTERNAL_NODE_CELL_SIZE + INTERNAL_NODE_CELL_KEY_SIZE;
+
 // returns a pointer to the start of the leaf node's cells
 uint32_t *leaf_node_num_cells(void *node)
 {
@@ -694,6 +730,20 @@ void create_new_root(Table *table, uint32_t right_child_page_num)
   memcpy(left_child, root, PAGE_SIZE);
   // left child is no longer the root
   set_node_root(left_child, false);
+
+  /* Root node is a new internal node with one key and two children */
+  initialize_internal_node(root);
+  set_node_root(root, true);
+  *internal_node_num_keys(root) = 1;
+  *internal_node_child(root, 0) = left_child_page_num;
+  uint32_t left_child_max_key = get_node_max_key(left_child);
+  *internal_node_key(root, 0) = left_child_max_key;
+  *internal_node_right_child(root) = right_child_page_num;
+}
+
+void set_node_root(void *node, bool)
+{
+
 }
 
 /**
