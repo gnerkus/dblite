@@ -250,29 +250,30 @@ const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
 const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
 
 /*
-* Internal Node Header Layout
-*
-* 1. byte 0: node_type
-* 2. byte 1: is_root
-* 3. byte 2 - 5: parent pointer
-* 4. byte 6 - 9: num keys
-* 5. byte 10 - 13: right child pointer
-* 6. byte 14 - 17: child pointer 0
-* 7. byte 15 - 21: key 0
-* ...
-* byte 4086 - 4089: child pointer 509
-* byte 4090 - 4093: key 509
-*/
+ * Internal Node Header Layout
+ *
+ * 1. byte 0: node_type [common] 8 bits
+ * 2. byte 1: is_root [common] 8 bits
+ * 3. byte 2 - 5: parent pointer [common] 32 bits
+ * 4. byte 6 - 9: num keys [internal] 32 bits
+ * 5. byte 10 - 13: right child pointer [internal] 32 bits
+ * 6. byte 14 - 17: child pointer 0 [internal] 32 bits
+ * 7. byte 18 - 21: key 0 [internal] 32 bits
+ * ...
+ * byte 4086 - 4089: child pointer 509 [internal] <always 1 more child pointer than keys>
+ * byte 4090 - 4093: key 509
+ */
 // the keys in an internal node are references to pages (leaf nodes)
 const uint32_t INTERNAL_NODE_NUM_KEYS_SIZE = sizeof(uint32_t);
+// the number of keys start where the common header ends
 const uint32_t INTERNAL_NODE_NUM_KEYS_OFFSET = COMMON_NODE_HEADER_SIZE;
 // Reference to the page number of the rightmost child of the internal node
 const uint32_t INTERNAL_NODE_RIGHT_CHILD_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_RIGHT_CHILD_OFFSET =
-  INTERNAL_NODE_NUM_KEYS_OFFSET + INTERNAL_NODE_NUM_KEYS_SIZE;
+    INTERNAL_NODE_NUM_KEYS_OFFSET + INTERNAL_NODE_NUM_KEYS_SIZE;
 const uint32_t INTERNAL_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE +
-  INTERNAL_NODE_NUM_KEYS_SIZE +
-  INTERNAL_NODE_RIGHT_CHILD_SIZE;
+                                           INTERNAL_NODE_NUM_KEYS_SIZE +
+                                           INTERNAL_NODE_RIGHT_CHILD_SIZE;
 
 /*
 * Internal Node Body Layout
@@ -283,8 +284,11 @@ const uint32_t INTERNAL_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE +
 const uint32_t INTERNAL_NODE_CELL_KEY_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_CELL_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_CELL_SIZE =
-  INTERNAL_NODE_CELL_SIZE + INTERNAL_NODE_CELL_KEY_SIZE;
+    INTERNAL_NODE_CELL_SIZE + INTERNAL_NODE_CELL_KEY_SIZE;
 
+/**
+ * LEAF NODE FUNCTIONS
+ */
 // returns a pointer to the start of the leaf node's cells
 uint32_t *leaf_node_num_cells(void *node)
 {
@@ -308,6 +312,70 @@ uint32_t *leaf_node_key(void *node, uint32_t cell_num)
 void *leaf_node_value(void *node, uint32_t cell_num)
 {
   return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE;
+}
+
+/**
+ * INTERNAL NODE FUNCTIONS
+ */
+// return a pointer to the number of keys for a node
+uint32_t *internal_node_num_keys(void *node)
+{
+  return node + INTERNAL_NODE_NUM_KEYS_OFFSET;
+}
+
+// return a pointer to the right child of an internal node
+uint32_t *internal_node_right_child(void *node)
+{
+  return node + INTERNAL_NODE_RIGHT_CHILD_OFFSET;
+}
+
+// return a pointer to a child at cell_num of an internal node
+uint32_t *internal_node_cell(void *node, uint32_t cell_num)
+{
+  return node + INTERNAL_NODE_HEADER_SIZE + cell_num * INTERNAL_NODE_CELL_SIZE;
+}
+
+// the key of an internal node immediately follows the cell (child)
+uint32_t *internal_node_key(void *node, uint32_t key_num)
+{
+  return internal_node_cell(node, key_num) + INTERNAL_NODE_CELL_SIZE;
+}
+
+uint32_t *internal_node_child(void *node, uint32_t child_num)
+{
+  uint32_t num_keys = *internal_node_num_keys(node);
+  if (child_num > num_keys)
+  {
+    printf("Tried to access child_num %d > num_keys %d\n", child_num, num_keys);
+    exit(EXIT_FAILURE);
+  }
+  else if (child_num == num_keys)
+  {
+    return internal_node_right_child(node);
+  }
+  else
+  {
+    return internal_node_cell(node, child_num);
+  }
+}
+
+/**
+ * get the last key of a node
+ * 
+ * For internal nodes:
+ * 1. Get the key number for the last key by subtracting 1 from num of keys
+ * 2. Get the cell at the key number from 1
+ * 3. Shift forward by cell size
+*/
+uint32_t get_node_max_key(void *node)
+{
+  switch (get_node_type(node))
+  {
+  case NODE_INTERNAL:
+    return *internal_node_key(node, *internal_node_num_keys(node) - 1);
+  case NODE_LEAF:
+    return *leaf_node_key(node, *leaf_node_num_cells(node) - 1);
+  }
 }
 
 void set_node_type(void *node, NodeType type)
@@ -719,12 +787,12 @@ void create_new_root(Table *table, uint32_t right_child_page_num)
     4. New root node points to two children.
   */
 
-  void* root = get_page(table->pager, table->root_page_num);
-  void* right_child = get_page(table->pager, right_child_page_num);
+  void *root = get_page(table->pager, table->root_page_num);
+  void *right_child = get_page(table->pager, right_child_page_num);
 
   // get an unallocated page to be used as the left child
   uint32_t left_child_page_num = get_unused_page_num(table->pager);
-  void* left_child = get_page(table->pager, left_child_page_num);
+  void *left_child = get_page(table->pager, left_child_page_num);
 
   /* Left child has data copied from old root */
   memcpy(left_child, root, PAGE_SIZE);
@@ -743,15 +811,14 @@ void create_new_root(Table *table, uint32_t right_child_page_num)
 
 void set_node_root(void *node, bool)
 {
-
 }
 
 /**
  * To split the content of the original page between two pages:
- * 
+ *
  * 1. Create / fetch the new page
  * 2. Find the middle number
- * 3. For each cell in the old page, choose whether to move it to the 
+ * 3. For each cell in the old page, choose whether to move it to the
  * new_page or keep in the old page, based on its index (key)
  * if the index is more than a middle number, move to new, if lower, leave in old
  * 4. Get the destination cell for each index from 3 above
@@ -759,7 +826,7 @@ void set_node_root(void *node, bool)
  * 5.1. if the index is for the cell to be written, write the data to memory
  * 5.2. if the index is for any of the existing cells (from old_node), copy
  * over to the new destination (new_node / old_node)
-*/
+ */
 void leaf_node_split_and_insert(Cursor *cursor, uint32_t key, Row *value)
 {
   // old_node is the page that's full; new_node is the page we want to split with
@@ -813,7 +880,8 @@ void leaf_node_split_and_insert(Cursor *cursor, uint32_t key, Row *value)
     // if the old_node was a root then we need to create a new root after the split
     // both the old_node and new_node will then be connected to this new root
     return create_new_root(cursor->table, new_page_num);
-  } else
+  }
+  else
   {
     printf("Need to implement updating parent after split\n");
     exit(EXIT_FAILURE);
