@@ -361,12 +361,12 @@ uint32_t *internal_node_child(void *node, uint32_t child_num)
 
 /**
  * get the last key of a node
- * 
+ *
  * For internal nodes:
  * 1. Get the key number for the last key by subtracting 1 from num of keys
  * 2. Get the cell at the key number from 1
  * 3. Shift forward by cell size
-*/
+ */
 uint32_t get_node_max_key(void *node)
 {
   switch (get_node_type(node))
@@ -809,8 +809,18 @@ void create_new_root(Table *table, uint32_t right_child_page_num)
   *internal_node_right_child(root) = right_child_page_num;
 }
 
-void set_node_root(void *node, bool)
+bool is_node_root(void *node)
 {
+  // the first 8 bits of a node define the node's type
+  // + the is_root_offset, we obtain whether the node is root or not
+  uint8_t value = *((uint8_t *)(node + IS_ROOT_OFFSET));
+  return (bool)value;
+}
+
+void set_node_root(void *node, bool is_root)
+{
+  uint8_t value = is_root;
+  *((uint8_t *)(node + IS_ROOT_OFFSET)) = value;
 }
 
 /**
