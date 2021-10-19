@@ -282,9 +282,9 @@ const uint32_t INTERNAL_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE +
 * Every key should be the maximum key contained in the child to its left.
 */
 const uint32_t INTERNAL_NODE_CELL_KEY_SIZE = sizeof(uint32_t);
-const uint32_t INTERNAL_NODE_CELL_SIZE = sizeof(uint32_t);
+const uint32_t INTERNAL_NODE_CHILD_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_CELL_SIZE =
-    INTERNAL_NODE_CELL_SIZE + INTERNAL_NODE_CELL_KEY_SIZE;
+    INTERNAL_NODE_CHILD_SIZE + INTERNAL_NODE_CELL_KEY_SIZE;
 
 /**
  * LEAF NODE FUNCTIONS
@@ -338,7 +338,7 @@ uint32_t *internal_node_cell(void *node, uint32_t cell_num)
 // the key of an internal node immediately follows the cell (child)
 uint32_t *internal_node_key(void *node, uint32_t key_num)
 {
-  return internal_node_cell(node, key_num) + INTERNAL_NODE_CELL_SIZE;
+  return internal_node_cell(node, key_num) + INTERNAL_NODE_CHILD_SIZE;
 }
 
 uint32_t *internal_node_child(void *node, uint32_t child_num)
@@ -394,19 +394,17 @@ void set_node_type(void *node, NodeType type)
 void initialize_leaf_node(void *node)
 {
   set_node_type(node, NODE_LEAF);
+  set_node_root(node, false);
   *leaf_node_num_cells(node) = 0;
 }
 
-void print_leaf_node(void *node)
+void initialize_internal_node(void *node)
 {
-  uint32_t num_cells = *leaf_node_num_cells(node);
-  printf("leaf (size %d)\n", num_cells);
-  for (uint32_t i = 0; i < num_cells; i++)
-  {
-    uint32_t key = *leaf_node_key(node, i);
-    printf("  - %d : %d\n", i, key);
-  }
+  set_node_type(node, NODE_INTERNAL);
+  set_node_root(node, false);
+  *internal_node_num_keys(node) = 0;
 }
+
 // </TREE DEFINITIONS>
 
 // display a prompt requesting input
@@ -1072,9 +1070,66 @@ Table *db_open(const char *filename)
     // New database file. Initialize page 0 as leaf node
     void *root_node = get_page(pager, 0);
     initialize_leaf_node(root_node);
+    // The first node in the table is the root
+    set_node_type(root_node, true);
   }
 
   return table;
+}
+
+// print indentation in output
+void indent(uint32_t level)
+{
+  for (uint32_t i = 0; i < level; i++)
+  {
+    printf("  ");
+  }
+}
+
+/**
+ * Recursive method to print tree
+ *
+ * 1. Start at root of tree (may be root of entire db or a specific internal node)
+ * 2. If leaf, print size of leaf. Print each key contained in leaf at a higher indentation
+ * level.
+ * 3. If internal, print size of internal node. For each child, run print_tree on child
+ * at a higher indentation level.
+ * 4. If internal, finally, run print_tree on right child.
+ */
+void print_tree(Pager *pager, uint32_t page_num, uint32_t indentation_level)
+{
+  void *node = get_page(pager, page_num);
+  uint32_t num_keys, child;
+
+  switch (get_node_type(node))
+  {
+  case (NODE_LEAF):
+    num_keys = *leaf_node_num_cells(node);
+    indent(indentation_level);
+    printf("- leaf (size %d)\n", num_keys);
+    for (uint32_t i = 0; i < num_keys; i++)
+    {
+      indent(indentation_level + 1);
+      printf("- %d\n", *leaf_node_key(node, i));
+    }
+    break;
+
+  case (NODE_INTERNAL):
+    num_keys = *internal_node_num_keys(node);
+    indent(indentation_level);
+    printf("- internal (size %d)\n", num_keys);
+    for (uint32_t i = 0; i < num_keys; i++)
+    {
+      child = *internal_node_child(node, i);
+      print_tree(pager, child, indentation_level + 1);
+
+      indent(indentation_level + 1);
+      printf("- key %d\n", *internal_node_key(node, i));
+    }
+    child = *internal_node_right_child(node);
+    print_tree(pager, child, indentation_level + 1);
+    break;
+  }
 }
 
 // Check if the input buffer holds a meta command
@@ -1088,7 +1143,7 @@ MetaCommandResult do_meta_command(InputBuffer *input_buffer, Table *table)
   else if (strcmp(input_buffer->buffer, ".btree") == 0)
   {
     printf("Tree:\n");
-    print_leaf_node(get_page(table->pager, 0));
+    print_tree(table->pager, 0, 0);
     return META_COMMAND_SUCCESS;
   }
   else if (strcmp(input_buffer->buffer, ".help") == 0)
