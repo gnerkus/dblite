@@ -359,6 +359,12 @@ uint32_t *internal_node_child(void *node, uint32_t child_num)
   }
 }
 
+NodeType get_node_type(void *node)
+{
+  uint8_t value = *((uint8_t *)(node + NODE_TYPE_OFFSET));
+  return (NodeType)value;
+}
+
 /**
  * get the last key of a node
  *
@@ -389,6 +395,12 @@ void set_node_type(void *node, NodeType type)
    * of this truncation will be the node type
    */
   *((uint8_t *)(node + NODE_TYPE_OFFSET)) = value;
+}
+
+void set_node_root(void *node, bool is_root)
+{
+  uint8_t value = is_root;
+  *((uint8_t *)(node + IS_ROOT_OFFSET)) = value;
 }
 
 void initialize_leaf_node(void *node)
@@ -657,12 +669,6 @@ Cursor *table_start(Table *table)
   return cursor;
 }
 
-NodeType get_node_type(void *node)
-{
-  uint8_t value = *((uint8_t *)(node + NODE_TYPE_OFFSET));
-  return (NodeType)value;
-}
-
 /**
  * Returns a cursor pointing to a page and row on the table.
  * It will return one of three results:
@@ -813,12 +819,6 @@ bool is_node_root(void *node)
   // + the is_root_offset, we obtain whether the node is root or not
   uint8_t value = *((uint8_t *)(node + IS_ROOT_OFFSET));
   return (bool)value;
-}
-
-void set_node_root(void *node, bool is_root)
-{
-  uint8_t value = is_root;
-  *((uint8_t *)(node + IS_ROOT_OFFSET)) = value;
 }
 
 /**
@@ -1071,7 +1071,7 @@ Table *db_open(const char *filename)
     void *root_node = get_page(pager, 0);
     initialize_leaf_node(root_node);
     // The first node in the table is the root
-    set_node_type(root_node, true);
+    set_node_root(root_node, true);
   }
 
   return table;
