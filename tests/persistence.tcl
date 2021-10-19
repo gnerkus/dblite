@@ -36,7 +36,8 @@ proc testOutput {description expected actual} {
 # Remove the test database
 file delete $dbFileDirectory
 
-set singleInsertDesc "keeps data after closing the connection"
+set singleInsertDesc "closes the connection successfully"
+set singleInsertFinalDesc "keeps data after closing the connection"
 set singleInsertInitialExpected "db > Executed.
 db > "
 set singleInsertFinalExpected "db > (1, foo, a@b.c)
@@ -47,4 +48,4 @@ set singleInsertInitialResult [exec $dbliteFileName $dbFile << "insert 1 foo a@b
 puts [testOutput $singleInsertDesc $singleInsertInitialExpected $singleInsertInitialResult]
 
 set singleInsertFinalResult [exec $dbliteFileName $dbFile << "select\n.exit\n"]
-puts [testOutput $singleInsertDesc $singleInsertFinalExpected $singleInsertFinalResult]
+puts [testOutput $singleInsertFinalDesc $singleInsertFinalExpected $singleInsertFinalResult]
