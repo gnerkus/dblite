@@ -47,29 +47,6 @@ set singleInsertResult [exec $dbliteFileName $dbFile << "insert 1 foo a@b.c\nins
 
 puts [testOutput $singleInsertDesc $singleInsertExpected $singleInsertResult]
 
-# Bulk insert test
-
-# Remove the test database
-file delete $dbFileDirectory
-
-set baseCommand ""
-
-set bulkInsertDesc "prints error message when table is full"
-set bulkInsertExpected "db > Error: Table full."
-
-for { set a 0} {$a < 1401} {incr a} {
-  append baseCommand "insert $a foo a@b.c\n"
-}
-
-append baseCommand ".exit\n"
-
-set result [exec $dbliteFileName $dbFile << $baseCommand]
-set resultList [split $result "\n"]
-
-set bulkInsertResult [lindex $resultList 1400]
-
-puts [testOutput $bulkInsertDesc $bulkInsertExpected $bulkInsertResult]
-
 # Insert long length strings
 
 # Remove the test database
@@ -148,3 +125,26 @@ db > "
 set duplicateIdInsertResult [exec $dbliteFileName $dbFile << "insert 1 foo a@b.c\ninsert 1 bar d@e.f\nselect\n.exit\n"]
 
 puts [testOutput $duplicateIdInsertDesc $duplicateIdInsertExpected $duplicateIdInsertResult]
+
+# Bulk insert test
+
+# Remove the test database
+file delete $dbFileDirectory
+
+set baseCommand ""
+
+set bulkInsertDesc "prints error message when table is full"
+set bulkInsertExpected "db > Error: Table full."
+
+for { set a 0} {$a < 1401} {incr a} {
+  append baseCommand "insert $a foo a@b.c\n"
+}
+
+append baseCommand ".exit\n"
+
+set result [exec $dbliteFileName $dbFile << $baseCommand]
+set resultList [split $result "\n"]
+
+set bulkInsertResult [lindex $resultList 1400]
+
+puts [testOutput $bulkInsertDesc $bulkInsertExpected $bulkInsertResult]

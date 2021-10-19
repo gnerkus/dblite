@@ -56,13 +56,56 @@ set treeViewExpected "db > Executed.
 db > Executed.
 db > Executed.
 db > Tree:
-leaf (size 3)
-  - 0 : 1
-  - 1 : 2
-  - 2 : 3
+- leaf (size 3)
+  - 1
+  - 2
+  - 3
 db > "
 set treeViewResult [
   exec $dbliteFileName $dbFile << "insert 3 foo a@b.c\ninsert 1 baa d@e.f\ninsert 2 buz g@h.i\n.btree\n.exit\n"
 ]
 
 puts [testOutput $treeViewDesc $treeViewExpected $treeViewResult]
+
+# Tree view: B-tree
+
+# Remove the test database
+file delete $dbFileDirectory
+
+set treeViewBTreeDesc "allows printing out the structure of a 3-leaf-node btree"
+set treeViewBTreeExpected "db > Tree:
+- internal (size 1)
+  - leaf (size 7)
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+  - key 7
+  - leaf (size 7)
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
+    - 13
+    - 14
+db > Need to implement searching an internal node "
+
+set baseCommand ""
+
+for { set a 1} {$a < 15} {incr a} {
+  append baseCommand "insert $a foo a@b.c\n"
+}
+
+append baseCommand ".btree\ninsert 15 foo a@b.c\n.exit\n"
+
+set result [exec $dbliteFileName $dbFile << $baseCommand]
+
+set resultList [split $result "\n"]
+
+set treeViewBTreeResult [lrange $resultList 14 end]
+
+puts [testOutput $treeViewBTreeDesc $treeViewBTreeExpected $treeViewBTreeResult]
