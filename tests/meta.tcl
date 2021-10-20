@@ -92,7 +92,8 @@ set treeViewBTreeExpected "db > Tree:
     - 12
     - 13
     - 14
-db > Need to implement searching an internal node "
+db > Executed.
+db > "
 
 set baseCommand ""
 
@@ -106,6 +107,7 @@ set result [exec $dbliteFileName $dbFile << $baseCommand]
 
 set resultList [split $result "\n"]
 
-set treeViewBTreeResult [lrange $resultList 14 end]
+set resultSubset [lrange $resultList 14 end]
+set treeViewBTreeResult [join $resultSubset "\n"]
 
 puts [testOutput $treeViewBTreeDesc $treeViewBTreeExpected $treeViewBTreeResult]
