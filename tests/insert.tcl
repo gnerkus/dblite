@@ -147,8 +147,9 @@ append bulkInsertExpected "Executed.\ndb > \n"
 
 set result [exec $dbliteFileName $dbFile << $baseCommand]
 set resultList [split $result "\n"]
+set resultSubset [lrange $resultList 15 end]
 
-set bulkInsertResult [lindex $resultList 15]
+set bulkInsertResult [join $resultSubset "\n"]
 
 puts [testOutput $bulkInsertDesc $bulkInsertExpected $bulkInsertResult]
 

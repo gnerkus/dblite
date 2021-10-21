@@ -652,23 +652,6 @@ void *get_page(Pager *pager, uint32_t page_num)
   return pager->pages[page_num];
 }
 
-// cursor pointing to the start of the table
-Cursor *table_start(Table *table)
-{
-  Cursor *cursor = malloc(sizeof(Cursor));
-  cursor->table = table;
-  // cursor points to the root page at start
-  cursor->page_num = table->root_page_num;
-  // cursor points to the first cell in the page
-  cursor->cell_num = 0;
-
-  void *root_node = get_page(table->pager, table->root_page_num);
-  uint32_t num_cells = *leaf_node_num_cells(root_node);
-  cursor->end_of_table = (num_cells == 0);
-
-  return cursor;
-}
-
 /**
  * Returns a cursor pointing to a page and row on the table.
  * It will return one of three results:
@@ -742,7 +725,7 @@ Cursor *internal_node_find(Table *table, uint32_t page_num, uint32_t key)
 
   /**
    * Binary search to find the key
-   * 
+   *
    * The key to insert must be less in value than the rightmost child's key
    * and greater than the leftmost child's key.
    *
@@ -777,6 +760,7 @@ Cursor *internal_node_find(Table *table, uint32_t page_num, uint32_t key)
 
 /**
  * Returns a cursor pointing to a position in the table
+ * cursor points to either an internal node or leaf node
  *
  * table - The table
  * key - The identifying key for the data object (row); key
@@ -795,6 +779,19 @@ Cursor *table_find(Table *table, uint32_t key)
   {
     return internal_node_find(table, root_page_num, key);
   }
+}
+
+// cursor pointing to the start of the table
+Cursor *table_start(Table *table)
+{
+  // use table_find to get the root node
+  Cursor *cursor = table_find(table, 0);
+
+  void *node = get_page(table->pager, cursor->page_num);
+  uint32_t num_cells = *leaf_node_num_cells(node);
+  cursor->end_of_table = (num_cells == 0);
+
+  return cursor;
 }
 
 // figure out where to read/write in memory for a row
