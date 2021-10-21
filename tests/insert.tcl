@@ -131,10 +131,36 @@ puts [testOutput $duplicateIdInsertDesc $duplicateIdInsertExpected $duplicateIdI
 # Remove the test database
 file delete $dbFileDirectory
 
+set bulkInsertDesc "prints all rows in a multi-level tree"
+
+set baseCommand ""
+for { set a 1} {$a < 16} {incr a} {
+  append baseCommand "insert $a user$a a$a@b.com\n"
+}
+append baseCommand "select\n.exit\n"
+
+set bulkInsertExpected "db > (1, user1, a1@b.com)\n"
+for { set a 2} {$a < 16} {incr a} {
+  append bulkInsertExpected "($a, user$a, a$a@b.com)\n"
+}
+append bulkInsertExpected "Executed.\ndb > \n"
+
+set result [exec $dbliteFileName $dbFile << $baseCommand]
+set resultList [split $result "\n"]
+
+set bulkInsertResult [lindex $resultList 15]
+
+puts [testOutput $bulkInsertDesc $bulkInsertExpected $bulkInsertResult]
+
+# Full table test
+
+# Remove the test database
+file delete $dbFileDirectory
+
 set baseCommand ""
 
-set bulkInsertDesc "prints error message when table is full"
-set bulkInsertExpected "db > Error: Table full."
+set fullTableInsertDesc "prints error message when table is full"
+set fullTableInsertExpected "db > Error: Table full."
 
 for { set a 0} {$a < 1401} {incr a} {
   append baseCommand "insert $a foo a@b.c\n"
@@ -145,6 +171,6 @@ append baseCommand ".exit\n"
 set result [exec $dbliteFileName $dbFile << $baseCommand]
 set resultList [split $result "\n"]
 
-set bulkInsertResult [lindex $resultList 1400]
+set fullTableInsertResult [lindex $resultList 1400]
 
-puts [testOutput $bulkInsertDesc $bulkInsertExpected $bulkInsertResult]
+puts [testOutput $fullTableInsertDesc $fullTableInsertExpected $fullTableInsertResult]
