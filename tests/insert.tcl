@@ -143,7 +143,7 @@ set bulkInsertExpected "db > (1, user1, a1@b.com)\n"
 for { set a 2} {$a < 16} {incr a} {
   append bulkInsertExpected "($a, user$a, a$a@b.com)\n"
 }
-append bulkInsertExpected "Executed.\ndb > \n"
+append bulkInsertExpected "Executed.\ndb > "
 
 set result [exec $dbliteFileName $dbFile << $baseCommand]
 set resultList [split $result "\n"]
