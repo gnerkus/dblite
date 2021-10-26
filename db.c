@@ -889,6 +889,11 @@ bool is_node_root(void *node)
 }
 
 /**
+ * Point a node to
+ */
+uint32_t *node_parent(void *node) { return node + PARENT_POINTER_OFFSET; }
+
+/**
  * To split the content of the original page between two pages:
  *
  * 1. Create / fetch the new page
@@ -906,9 +911,12 @@ void leaf_node_split_and_insert(Cursor *cursor, uint32_t key, Row *value)
 {
   // old_node is the page that's full; new_node is the page we want to split with
   void *old_node = get_page(cursor->table->pager, cursor->page_num);
+  uint32_t old_max = get_node_max_key(old_node);
   uint32_t new_page_num = get_unused_page_num(cursor->table->pager);
   void *new_node = get_page(cursor->table->pager, new_page_num);
   initialize_leaf_node(new_node);
+
+  *node_parent(new_node) = *node_parent(old_node);
   /**
    * Update the sibling pointers
    */
