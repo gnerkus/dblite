@@ -343,12 +343,18 @@ uint32_t *internal_node_cell(void *node, uint32_t cell_num)
   return node + INTERNAL_NODE_HEADER_SIZE + cell_num * INTERNAL_NODE_CELL_SIZE;
 }
 
-// the key of an internal node immediately follows the cell (child)
+/**
+ * The key of an internal node immediately follows the cell (child)
+ * This method is a getter and setter
+*/
 uint32_t *internal_node_key(void *node, uint32_t key_num)
 {
-  return internal_node_cell(node, key_num) + INTERNAL_NODE_CHILD_SIZE;
+  return (void *)internal_node_cell(node, key_num) + INTERNAL_NODE_CHILD_SIZE;
 }
 
+/**
+ * Find a child node of a internal node via its child_num ref
+*/
 uint32_t *internal_node_child(void *node, uint32_t child_num)
 {
   uint32_t num_keys = *internal_node_num_keys(node);
@@ -725,36 +731,11 @@ Cursor *leaf_node_find(Table *table, uint32_t page_num, uint32_t key)
  */
 Cursor *internal_node_find(Table *table, uint32_t page_num, uint32_t key)
 {
-  void *node = get_page(table->pager, page_num);
-  uint32_t num_keys = *internal_node_num_keys(node);
+  void* node = get_page(table->pager, page_num);
 
-  /* Binary search to find index of child to search */
-  uint32_t min_index = 0;
-  uint32_t max_index = num_keys; /* there is one more child than key */
-
-  /**
-   * Binary search to find the key
-   *
-   * The key to insert must be less in value than the rightmost child's key
-   * and greater than the leftmost child's key.
-   *
-   * min_index holds the value of the position to write the key
-   */
-  while (min_index != max_index)
-  {
-    uint32_t index = (min_index + max_index) / 2;
-    uint32_t key_to_right = *internal_node_key(node, index);
-    if (key_to_right >= key)
-    {
-      max_index = index;
-    }
-    else
-    {
-      min_index = index + 1;
-    }
-  }
-
-  uint32_t child_num = *internal_node_child(node, min_index);
+  uint32_t child_index = internal_node_find_child(node, key);
+  uint32_t child_num = *internal_node_child(node, child_index); 
+  
   void *child = get_page(table->pager, child_num);
   switch (get_node_type(child))
   {
@@ -878,6 +859,10 @@ void create_new_root(Table *table, uint32_t right_child_page_num)
   uint32_t left_child_max_key = get_node_max_key(left_child);
   *internal_node_key(root, 0) = left_child_max_key;
   *internal_node_right_child(root) = right_child_page_num;
+
+  // Point both children to the parent
+  *node_parent(left_child) = table->root_page_num;
+  *node_parent(right_child) = table->root_page_num;
 }
 
 bool is_node_root(void *node)
@@ -889,9 +874,76 @@ bool is_node_root(void *node)
 }
 
 /**
- * Point a node to
+ * In order to get a reference to the parent,
+ * we need to start recording in each node a pointer to its parent node.
  */
 uint32_t *node_parent(void *node) { return node + PARENT_POINTER_OFFSET; }
+
+uint32_t internal_node_find_child(void *parent_node, uint32_t key)
+{
+  uint32_t num_keys = *internal_node_num_keys(parent_node);
+
+  /* Binary search */
+  uint32_t min_index = 0;
+  uint32_t max_index = num_keys; /* there is one more child than key */
+
+  /**
+   * Binary search to find the key
+   *
+   * The key to insert must be less in value than the rightmost child's key
+   * and greater than the leftmost child's key.
+   *
+   * min_index holds the value of the position to write the key
+   */
+  while (min_index != max_index)
+  {
+    uint32_t index = (min_index + max_index) / 2;
+    uint32_t key_to_right = *internal_node_key(parent_node, index);
+    if (key_to_right >= key)
+    {
+      max_index = index;
+    }
+    else
+    {
+      min_index = index + 1;
+    }
+  }
+
+  return min_index;
+}
+
+/**
+ * Example:
+ * 
+ * Let's say this is the current state of the db:
+ * Internal: *, 5, *
+ * Left child: 1, 5
+ * 
+ * Say we add a new cell, 3, and the maximum number of cells is 2.
+ * The db state will become:
+ * Internal: *, 5, *
+ * Left child: 1, 3
+ * Right child: 5
+ * (the left child was split)
+ * 
+ * We now want the left key in the parent to point to the left child
+ * The left key should be the max of the left child, 3
+ * So this method will:
+ * i. Find the child at the key 5 (left child)
+ * ii. Change the key that points to the left child in the parent to 3
+ * (so we change the 5 to 3)
+ * 
+ * The table now looks like this:
+ * Internal: *, 3, *
+ * Left child: 1, 3
+ * Right child: 5
+*/
+void update_internal_node_key(void *parent_node, uint32_t old_key, uint32_t new_key)
+{
+  // find the child at the old_key position
+  uint32_t old_child_index = internal_node_find_child(parent_node, old_key);
+  *internal_node_key(parent_node, old_child_index) = new_key;
+}
 
 /**
  * To split the content of the original page between two pages:
@@ -980,6 +1032,22 @@ void leaf_node_split_and_insert(Cursor *cursor, uint32_t key, Row *value)
   {
     printf("Need to implement updating parent after split\n");
     exit(EXIT_FAILURE);
+    /**
+     * 1. get the parent page [DONE]
+     * 2. get the updated max key in the old node [DONE]
+     * 3. update the max key for old node in the internal node
+     * with the updated max key
+     * 4. get the max key of the new node
+     * 5. add the max key of the new node to the internal node
+     *
+     */
+    uint32_t parent_page_num = *node_parent(old_node);
+    void *parent_page = get_page(cursor->table->pager, parent_page_num);
+
+    uint32_t new_max = get_node_max_key(old_node);
+
+    update_internal_node_key(parent_page, old_max, new_max);
+    internal_node_insert(cursor->table, parent_page_num, new_page_num);
   }
 }
 
